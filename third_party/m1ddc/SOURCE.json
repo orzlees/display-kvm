@@ -1,0 +1,86 @@
+{
+  "name": "m1ddc",
+  "repository": "https://github.com/waydabber/m1ddc",
+  "tag": "v1.3.1",
+  "commit": "7339ceebb03f691b1eaeb8471dca301d215d19c8",
+  "release_date": "2026-10-29",
+  "license": "MIT",
+  "license_file": "upstream/LICENSE",
+  "copyright": "Copyright (c) 2021 waydabber",
+  "upstream_directory": "upstream",
+  "local_modifications": false,
+  "files": [
+    {
+      "upstream_path": "Makefile",
+      "path": "upstream/Makefile",
+      "url": "https://raw.githubusercontent.com/waydabber/m1ddc/7339ceebb03f691b1eaeb8471dca301d215d19c8/Makefile",
+      "sha256": "336e0bd09cd6328fd9dfae08a018a9b349cfe25000c6a95f135da92df7a5c01d",
+      "size_bytes": 3260,
+      "ends_with_lf": true
+    },
+    {
+      "upstream_path": "LICENSE",
+      "path": "upstream/LICENSE",
+      "url": "https://raw.githubusercontent.com/waydabber/m1ddc/7339ceebb03f691b1eaeb8471dca301d215d19c8/LICENSE",
+      "sha256": "b01d3d1de4baa142bb3746588e70814d04eae071d104f8aff580f88e30bb4547",
+      "size_bytes": 1066,
+      "ends_with_lf": true
+    },
+    {
+      "upstream_path": "README.md",
+      "path": "upstream/README.md",
+      "url": "https://raw.githubusercontent.com/waydabber/m1ddc/7339ceebb03f691b1eaeb8471dca301d215d19c8/README.md",
+      "sha256": "d24debe644f97bfc92d309a2105e0248d2119359bb31380d7c5b1e7096f1a730",
+      "size_bytes": 7914,
+      "ends_with_lf": true
+    },
+    {
+      "upstream_path": "headers/i2c.h",
+      "path": "upstream/headers/i2c.h",
+      "url": "https://raw.githubusercontent.com/waydabber/m1ddc/7339ceebb03f691b1eaeb8471dca301d215d19c8/headers/i2c.h",
+      "sha256": "7e0ae57dccbe53d84ddbc4c10f3efc036a06269583b788a854a89f8de81d326d",
+      "size_bytes": 1906,
+      "ends_with_lf": true
+    },
+    {
+      "upstream_path": "headers/ioregistry.h",
+      "path": "upstream/headers/ioregistry.h",
+      "url": "https://raw.githubusercontent.com/waydabber/m1ddc/7339ceebb03f691b1eaeb8471dca301d215d19c8/headers/ioregistry.h",
+      "sha256": "10a4833144b6168afa978f8ac63da30fe6dc67df24d881f22cb58f8a6e2b5ad2",
+      "size_bytes": 1476,
+      "ends_with_lf": false
+    },
+    {
+      "upstream_path": "headers/utils.h",
+      "path": "upstream/headers/utils.h",
+      "url": "https://raw.githubusercontent.com/waydabber/m1ddc/7339ceebb03f691b1eaeb8471dca301d215d19c8/headers/utils.h",
+      "sha256": "fcd87a2495f5bb7ca1d86253e3bab7ee1758f939c079106bf81c8bcaf6599b64",
+      "size_bytes": 91,
+      "ends_with_lf": false
+    },
+    {
+      "upstream_path": "sources/i2c.m",
+      "path": "upstream/sources/i2c.m",
+      "url": "https://raw.githubusercontent.com/waydabber/m1ddc/7339ceebb03f691b1eaeb8471dca301d215d19c8/sources/i2c.m",
+      "sha256": "0f21bfb03a9f851f4dec72d6df1eae1809fe8ec49b0b74d3f4b9be601c2902d6",
+      "size_bytes": 2972,
+      "ends_with_lf": true
+    },
+    {
+      "upstream_path": "sources/ioregistry.m",
+      "path": "upstream/sources/ioregistry.m",
+      "url": "https://raw.githubusercontent.com/waydabber/m1ddc/7339ceebb03f691b1eaeb8471dca301d215d19c8/sources/ioregistry.m",
+      "sha256": "39bbc789169aa1d7132bfc3da6005f8e5aeb41052195992181e7c61addcfe0a8",
+      "size_bytes": 10421,
+      "ends_with_lf": true
+    },
+    {
+      "upstream_path": "sources/m1ddc.m",
+      "path": "upstream/sources/m1ddc.m",
+      "url": "https://raw.githubusercontent.com/waydabber/m1ddc/7339ceebb03f691b1eaeb8471dca301d215d19c8/sources/m1ddc.m",
+      "sha256": "37794b3c9d0831796496a11500f33b12c3c1a05f781d94c90c9762727b50f678",
+      "size_bytes": 14754,
+      "ends_with_lf": true
+    }
+  ]
+}

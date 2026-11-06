@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DisplayKVM</title>
+    <link rel="stylesheet" href="/style.css" />
+    <style>.function-nav a{text-decoration:none}.function-nav a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}</style>
+    <script type="module" src="/wails/runtime.js"></script>
+    <script src="/desktop-i18n.js" defer></script>
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="app-header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <rect x="4" y="6" width="19" height="14" rx="3" />
+              <path d="M11 25h12M17 20v5M27 12v10a3 3 0 0 1-3 3" />
+            </svg>
+          </span>
+          <span>DisplayKVM</span>
+        </div>
+        <nav class="connection-actions function-nav" data-i18n-aria-label="nav.label" aria-label="Navigation"><a class="button-text" href="/devices/" data-i18n="nav.devices">Devices</a><a class="button-text" href="/targets/" data-i18n="nav.targets">Targets &amp; groups</a><a class="button-text" href="/rules/" data-i18n="nav.rules">Event rules</a><a class="button-text" href="/schedules/" data-i18n="nav.schedules">Schedules</a></nav>
+        <div class="appearance">
+          <label for="theme-mode" data-i18n="overview.appearance">Appearance</label>
+          <select id="theme-mode" aria-describedby="theme-description">
+            <option value="system" data-i18n="settings.language.system">Follow system</option>
+            <option value="dark" data-i18n="overview.dark">Dark</option>
+            <option value="light" data-i18n="overview.light">Light</option>
+          </select>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow" data-i18n="overview.eyebrow">Your desk, one choice</p>
+            <h1 data-i18n="overview.switch">Switch displays</h1>
+            <p class="page-description" data-i18n="overview.description">Choose one display or a group and switch to your computer.</p>
+          </div>
+          <button id="refresh-status" class="button-secondary" type="button" disabled>
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M16.5 8a6.5 6.5 0 1 0-1 6.2M16.5 3.5V8H12" />
+            </svg>
+            <span id="refresh-label" data-i18n="overview.refresh">Refresh displays</span>
+          </button>
+        </div>
+
+        <section class="connection-strip" aria-labelledby="connection-heading">
+          <div class="connection-title">
+            <span class="status-dot" aria-hidden="true"></span>
+            <div>
+              <h2 id="connection-heading" data-i18n="app.connection.disconnected">Service not connected</h2>
+              <p id="connection-description" data-i18n="overview.connect_hint">Start the service, then connect to read displays.</p>
+            </div>
+          </div>
+          <div class="connection-actions">
+            <span id="connection-state" class="state-label" data-i18n="overview.disconnected">Disconnected</span>
+            <button id="connect-backend" class="button-text" type="button" data-i18n="overview.connect">Connect to service</button>
+          </div>
+        </section>
+
+        <div id="status-error" class="error-message" role="alert" hidden></div>
+
+        <form id="switch-form" class="switch-panel" aria-labelledby="switch-heading" aria-describedby="selection-hint">
+          <div class="switch-intro"><span class="step-number" aria-hidden="true">01</span><h2 id="switch-heading" data-i18n="overview.scope_heading">Choose what to switch</h2></div>
+          <div class="selection-fields">
+            <div class="field field-kind">
+              <label for="scope-kind" data-i18n="overview.scope">Scope</label>
+              <select id="scope-kind" disabled><option value="display" data-i18n="overview.single">Single display</option><option value="group" data-i18n="overview.group">Group</option></select>
+            </div>
+            <div class="field">
+              <label id="scope-choice-label" for="scope-choice" data-i18n="overview.display">Display</label>
+              <select id="scope-choice" disabled><option value="" data-i18n="overview.choose_display">Choose a display</option></select>
+            </div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="field">
+              <label for="target-choice" data-i18n="overview.to">Switch to</label>
+              <select id="target-choice" disabled><option value="" data-i18n="overview.choose_target">Choose a target</option></select>
+            </div>
+          </div>
+          <div class="switch-bottom">
+            <p id="selection-hint" data-i18n="overview.selection_hint">Connect to the service, then choose a scope and target.</p>
+            <button id="switch-button" class="button-primary" type="submit" disabled data-i18n="overview.switch">Switch displays</button>
+          </div>
+        </form>
+
+        <section class="device-panel" aria-labelledby="devices-heading" aria-busy="true">
+          <div class="panel-heading">
+            <h2 id="devices-heading" data-i18n="overview.devices_heading">Displays &amp; state</h2>
+            <span id="devices-caption" class="panel-caption" data-i18n="app.display.unread">Not read yet</span>
+          </div>
+          <ul id="display-list" class="display-list" aria-label="Displays" data-i18n-aria-label="overview.displays"></ul>
+          <div id="empty-state" class="empty-state">
+            <div class="monitor-art" aria-hidden="true">
+              <svg viewBox="0 0 176 112" fill="none">
+                <rect class="monitor-back" x="58" y="15" width="98" height="65" rx="8" />
+                <rect class="monitor-front" x="20" y="28" width="106" height="68" rx="8" />
+                <path class="monitor-line" d="M72 96v10M55 106h34" />
+                <path class="monitor-detail" d="M34 79h78M34 43h28" />
+                <circle class="monitor-detail" cx="106" cy="87" r="1.5" />
+              </svg>
+            </div>
+            <h3 id="empty-heading" data-i18n="overview.empty_disconnected">Connect to see your displays</h3>
+            <p id="empty-description" data-i18n="overview.empty_connect_hint">Start the service, then connect to read displays. Commands are sent only when you choose Switch.</p>
+          </div>
+          <div class="panel-footer">
+            <span class="info-symbol" aria-hidden="true">i</span>
+            <p id="device-note" data-i18n="overview.refresh_hint">Refresh reads displays and targets without switching inputs.</p>
+          </div>
+        </section>
+
+        <section id="results-panel" class="device-panel results-panel" aria-labelledby="results-heading" hidden>
+          <div class="panel-heading">
+            <div><p id="attempt-target" class="eyebrow"></p><h2 id="results-heading" data-i18n="overview.last_switch">Latest switch</h2></div>
+            <span id="result-summary" class="state-label"></span>
+          </div>
+          <ul id="result-list" class="display-list" aria-label="Per-display switching results" data-i18n-aria-label="overview.results_label"></ul>
+          <div class="panel-footer"><span class="info-symbol" aria-hidden="true">i</span><p data-i18n="overview.readback_hint">Input readback is not proof of the picture. Displays are switched separately; success is not guaranteed for all.</p></div>
+        </section>
+
+        <p id="status-message" class="refresh-message" role="status" aria-live="polite" data-i18n="overview.reading">
+          Reading client state…
+        </p>
+        <p id="tray-message" class="tray-note" data-i18n="app.tray.notice">Use the main window if no tray icon is available.</p>
+      </main>
+
+      <footer class="app-footer">
+        <span data-i18n="overview.close_hint">Closing the client does not stop the service</span>
+        <a class="button-text" href="/startup/" data-i18n="nav.settings">Settings</a>
+        <span id="theme-description" data-i18n="overview.theme_fallback">Follows system appearance, with dark as fallback</span>
+      </footer>
+    </div>
+    <template id="display-row">
+      <li class="display-row">
+        <span class="display-icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><rect x="5" y="6" width="22" height="16" rx="3"/><path d="M16 22v5M11 27h10"/></svg></span>
+        <div class="display-copy"><h3 class="display-name"></h3><p class="display-reason"></p></div>
+        <span class="row-tag"></span>
+      </li>
+    </template>
+    <template id="result-row">
+      <li class="result-row">
+        <div class="result-copy"><div class="result-title"><h3 class="result-name"></h3><span class="result-label"></span></div><p class="result-detail"></p><p class="result-evidence"></p></div>
+        <button class="button-secondary confirm-button" type="button" data-i18n="overview.confirm_picture">I can see the picture</button>
+      </li>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="schedules.page_title">{{tr "schedules.page_title"}}</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/schedules-assets/schedules.css" />
+  {{catalog}}
+</head>
+<body>
+  <div class="shell schedules-shell">
+    <header class="app-header">
+      <a class="brand" href="/" aria-label="{{tr "nav.back"}}" data-i18n-aria-label="nav.back"><span class="schedule-mark" aria-hidden="true">◷</span><span>DisplayKVM</span></a>
+      <nav class="schedule-nav" aria-label="{{tr "nav.label"}}" data-i18n-aria-label="nav.label"><a href="/">{{t "nav.overview"}}</a><a href="/rules/">{{t "nav.rules"}}</a><span aria-current="page">{{t "nav.schedules"}}</span></nav>
+    </header>
+    <main class="main-content">
+      <div class="page-heading"><div><p class="eyebrow">{{t "schedules.eyebrow"}}</p><h1>{{t "schedules.title"}}</h1><p class="page-description">{{t "schedules.description"}}</p></div><span class="state-label">{{if not .Ready}}{{t "schedules.unread"}}{{else if .Dirty}}{{t "schedules.unsaved"}}{{else}}{{t "schedules.loaded"}}{{end}}</span></div>
+      {{if .ErrorKey}}<div class="error-message schedule-message" role="alert">{{t .ErrorKey}}{{if .ErrorSummary}}<p>{{t .ErrorSummary}}</p>{{end}}{{with .Diagnostic}}{{template "schedule-diagnostic" .}}{{end}}</div>{{end}}
+      {{if .Notice}}<p class="schedule-notice" role="status" aria-live="polite">{{t .Notice}}</p>{{end}}
+      {{if not .Writable}}<section class="schedule-readonly" aria-label="{{tr "schedules.edit_state"}}" data-i18n-aria-label="schedules.edit_state"><strong>{{t "schedules.readonly"}}</strong><p>{{if .Ready}}{{t "schedules.readonly_path"}}{{else}}{{t "schedules.readonly_connection"}}{{end}}</p></section>{{end}}
+      <form method="post" action="/schedules/" class="schedule-form">
+        <input type="hidden" name="_token" value="{{.Token}}" />
+        <input type="hidden" name="revision" value="{{.Revision}}" />
+        <div class="schedule-workspace">
+          <section class="schedule-list" aria-labelledby="list-heading">
+            <div class="schedule-panel-heading"><div><p class="eyebrow">{{t "schedules.daily"}}</p><h2 id="list-heading">{{t "schedules.your_schedules"}}</h2></div><button class="button-text" name="action" value="add" type="submit" formnovalidate {{if not .Editable}}disabled{{end}}>{{t "schedules.add"}}</button></div>
+            <ul class="schedule-items">
+              {{range .Rows}}<li><button class="schedule-item {{if .Selected}}is-selected{{end}}" type="submit" name="selection" value="{{.Index}}" formnovalidate {{if not $.Editable}}disabled{{end}}><span class="schedule-item-top"><strong>{{if .ID}}{{.ID}}{{else}}{{t "schedules.unnamed"}}{{end}}</strong><span class="schedule-tag">{{if .Enabled}}{{t "schedules.enabled"}}{{else}}{{t "schedules.disabled"}}{{end}}</span></span><span class="schedule-hour">{{.Time}}</span><span class="schedule-zone">{{.Timezone}}</span></button></li>{{else}}<li class="schedule-empty"><span class="empty-clock" aria-hidden="true">◷</span><h3>{{t "schedules.empty"}}</h3><p>{{t "schedules.empty_hint"}}</p></li>{{end}}
+            </ul>
+          </section>
+          <section class="schedule-editor" aria-labelledby="editor-heading">
+            <div class="schedule-panel-heading"><div><p class="eyebrow">{{t "schedules.time_zone"}}</p><h2 id="editor-heading">{{if .Editor}}{{t "schedules.edit"}}{{else}}{{t "schedules.first"}}{{end}}</h2></div><span class="schedule-step" aria-hidden="true">01 / 02</span></div>
+            {{if .Editor}}
+            <input type="hidden" name="editing" value="1" /><input type="hidden" name="index" value="{{.Selected}}" />
+            <fieldset {{if not .Editable}}disabled{{end}}>
+              <div class="field"><label for="schedule-id">{{t "schedules.id"}}</label><input id="schedule-id" name="id" value="{{.Editor.ID}}" maxlength="128" required aria-describedby="id-hint" /><p id="id-hint" class="schedule-help">{{t "schedules.id_hint"}}</p></div>
+              <div class="schedule-time-fields"><div class="field"><label for="schedule-time">{{t "schedules.time"}}</label><input id="schedule-time" name="time" type="text" inputmode="numeric" placeholder="09:00" value="{{.Editor.Time}}" maxlength="5" required aria-describedby="time-hint" /><p id="time-hint" class="schedule-help">{{t "schedules.time_hint"}}</p></div><div class="field"><label for="schedule-zone">{{t "schedules.timezone"}}</label><input id="schedule-zone" name="timezone" value="{{.Editor.Timezone}}" placeholder="Asia/Shanghai" required aria-describedby="zone-hint" /><p id="zone-hint" class="schedule-help">{{t "schedules.zone_hint"}}</p></div></div>
+              <label class="schedule-enabled"><input type="checkbox" name="enabled" value="1" {{if .Editor.Enabled}}checked{{end}} /><span><strong>{{t "schedules.enable"}}</strong><small>{{t "schedules.enable_hint"}}</small></span></label>
+            </fieldset>
+            <div class="schedule-editor-actions"><button class="button-primary" name="action" value="save" type="submit" formnovalidate {{if not .Editable}}disabled{{end}}>{{t "schedules.validate_save"}}</button><button class="button-secondary" name="action" value="disable" type="submit" formnovalidate {{if not .Editable}}disabled{{end}}>{{t "schedules.disable_draft"}}</button><button class="button-text" name="action" value="cancel" type="submit" formnovalidate {{if not .CanCancel}}disabled{{end}}>{{t "schedules.cancel"}}</button></div>
+            {{else}}<div class="schedule-start"><h3>{{t "schedules.start_title"}}</h3><p>{{t "schedules.start_hint"}}</p></div><div class="schedule-editor-actions"><button class="button-secondary" name="action" value="save" type="submit" formnovalidate {{if not .Editable}}disabled{{end}}>{{t "schedules.save_empty"}}</button><button class="button-text" name="action" value="cancel" type="submit" formnovalidate {{if not .CanCancel}}disabled{{end}}>{{t "schedules.cancel"}}</button></div>{{end}}
+          </section>
+        </div>
+        {{if .CommitID}}<section class="schedule-commit" aria-labelledby="commit-heading"><div class="schedule-panel-heading"><div><p class="eyebrow">{{t "schedules.save_confirmation"}}</p><h2 id="commit-heading">{{if .CanApply}}{{t "schedules.confirm_title"}}{{else}}{{t "targets.submission_result"}}{{end}}</h2></div><span class="schedule-step" aria-hidden="true">02 / 02</span></div><div class="schedule-evidence"><span>{{t "schedules.file"}}<strong>{{t .Saved}}</strong></span><span>{{t "schedules.backend"}}<strong>{{t .Effective}}</strong></span></div><p>{{t "schedules.commit_hint"}}</p><p class="schedule-commit-id">{{t "schedules.commit_id"}} <code>{{.CommitID}}</code></p>{{if .CommitError}}<div class="error-message" role="alert">{{t (errorKey .CommitError.Code)}}{{with .CommitDiagnostic}}{{template "schedule-diagnostic" .}}{{end}}</div>{{end}}{{if .CanApply}}<label class="schedule-confirm"><input type="checkbox" name="confirmed" value="1" />{{t "schedules.confirm_checked"}}</label><button class="button-primary" name="action" value="apply" type="submit" formnovalidate>{{t "schedules.confirm_save"}}</button><button class="button-text" name="action" value="cancel" type="submit" formnovalidate>{{t "schedules.cancel_save"}}</button>{{end}}<button class="button-secondary" name="action" value="query" type="submit" formnovalidate>{{t "schedules.query"}}</button></section>{{end}}
+        <div class="schedule-reload"><p>{{t "schedules.reload_hint"}}</p><button class="button-text" name="action" value="reload" type="submit" formnovalidate {{if not .CanReload}}disabled{{end}}>{{t "schedules.reload"}}</button></div>
+      </form>
+      <section class="schedule-runtime" aria-labelledby="runtime-heading">
+        <div class="schedule-panel-heading"><div><p class="eyebrow">{{t "schedules.actual_state"}}</p><h2 id="runtime-heading">{{t "schedules.next_title"}}</h2></div></div>
+        <p class="schedule-help">{{t "schedules.runtime_hint"}}</p>
+        <ul class="schedule-statuses">
+          {{range .Statuses}}<li><div><strong>{{.ID}}</strong><span>{{if .Enabled}}{{t "schedules.enabled_state"}}{{else}}{{t "schedules.disabled_state"}}{{end}}</span></div><p>{{if .Instant}}<time datetime="{{.Instant}}">{{.Next}}</time>{{else}}{{t "schedules.no_next"}}{{end}}</p><p class="schedule-help">{{m "schedules.daily_time" "time" .Time "timezone" .Timezone}}</p><small>{{t "schedules.missed_policy"}}{{if eq .Policy "skip"}}{{t "schedules.policy_skip"}}{{else}}{{.Policy}}{{end}}</small></li>{{else}}<li class="schedule-help">{{t "schedules.status_empty"}}</li>{{end}}
+        </ul>
+        {{if not .SkipGuaranteed}}<div class="schedule-policy"><strong>{{t "schedules.limited_skip"}}</strong><p>{{t "schedules.limited_skip_hint"}}{{.TimerReason}}</p></div>{{end}}
+      </section>
+    </main>
+    <footer class="app-footer"><span>{{t "schedules.footer_service"}}</span><span>{{t "schedules.footer_rules"}}</span></footer>
+  </div>
+</body>
+</html>
+{{define "schedule-diagnostic"}}<p>{{t "common.original_detail"}}</p><pre data-diagnostic-code="{{.Code}}">code: {{.Code}}
+message: {{.Message}}
+field: {{.Field}}
+retryable: {{.Retryable}}
+detail: {{.Detail}}</pre>{{end}}

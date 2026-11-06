@@ -1,0 +1,112 @@
+.rules-shell { max-width: 1240px; }
+.rules-brand { color: var(--text); text-decoration: none; }
+.rules-back { color: var(--secondary); font-size: 12px; text-decoration: none; }
+.rules-back:hover { color: var(--accent); }
+.rules-shell a:focus-visible, .rules-shell input:focus-visible, .rules-shell textarea:focus-visible, .rules-shell summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.rules-workspace { display: grid; grid-template-columns: minmax(235px, .74fr) minmax(0, 1.7fr); gap: 18px; align-items: start; }
+.rules-count { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.rules-library .panel-heading { flex-wrap: wrap; gap: 4px 12px; }
+.rules-list, .rules-records { list-style: none; margin: 0; padding: 0; }
+.rules-rule { padding: 18px; border-bottom: 1px solid var(--border); }
+.rules-rule:last-child { border-bottom: 0; }
+.rules-rule[data-selected="true"] { box-shadow: inset 2px 0 var(--accent); background: var(--accent-soft); }
+.rules-rule-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.rules-rule-id { overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.rules-rule-status { flex-shrink: 0; color: var(--muted); font-size: 11px; }
+.rules-rule[data-enabled="true"] .rules-rule-status { color: var(--accent); }
+.rules-rule-summary { margin: 8px 0 5px; color: var(--secondary); font-size: 12px; overflow-wrap: anywhere; }
+.rules-rule-last { margin: 0; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.rules-rule-actions { display: flex; justify-content: space-between; gap: 6px; margin: 10px -10px -4px; }
+.rules-rule-actions button { font-size: 12px; }
+.rules-empty { padding: 28px 20px 32px; }
+.rules-empty h3 { font-size: 15px; }
+.rules-empty p { font-size: 12px; }
+.rules-empty-mark { margin-bottom: 10px; color: var(--accent); font-size: 36px; font-weight: 400; line-height: 1; }
+.rules-editor .panel-heading .eyebrow { margin-bottom: 2px; font-size: 11px; letter-spacing: .5px; }
+.rules-editor-empty { min-height: 290px; justify-content: center; }
+.rules-flow { display: block; margin-bottom: 16px; color: var(--text); font-size: 17px; }
+.rules-flow i { margin: 0 14px; color: var(--accent); font-style: normal; }
+.rules-editor-empty p { font-size: 12px; }
+.rules-identity { display: flex; align-items: start; justify-content: space-between; gap: 20px; padding: 20px; }
+.rules-identity > .field { flex: 1; }
+.rules-check { display: flex; align-items: center; gap: 8px; margin-top: 30px; white-space: nowrap; font-size: 12px; }
+.rules-check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.rules-step { min-width: 0; margin: 0; padding: 10px 20px 20px; border: 0; }
+.rules-step + .rules-step { border-top: 1px solid var(--border); padding-top: 16px; }
+.rules-step legend { float: left; width: 100%; margin-bottom: 14px; padding: 0; font-size: 14px; font-weight: 600; }
+.rules-step legend + * { clear: both; }
+.rules-step .step-number { margin-right: 9px; font-weight: 400; }
+.rules-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.rules-field-wide { grid-column: 1 / -1; }
+.rules-shell .field input, .rules-shell .field textarea { display: block; width: 100%; min-width: 0; min-height: 42px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-muted); color: var(--text); font: inherit; font-size: 13px; }
+.rules-shell .field textarea { min-height: 64px; resize: vertical; line-height: 1.6; }
+.rules-shell .field select { font-size: 13px; }
+.rules-shell .field input::placeholder, .rules-shell .field textarea::placeholder { color: var(--muted); opacity: .8; }
+.rules-shell .field input:disabled, .rules-shell .field textarea:disabled { opacity: .6; cursor: not-allowed; }
+.rules-shell .field input[readonly] { color: var(--secondary); }
+.rules-shell .field select[multiple] { padding: 6px; }
+.rules-shell .field select[multiple] option { padding: 7px; border-radius: 4px; }
+.field-hint { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.rules-capabilities, .rules-advanced { margin-top: 14px; }
+.rules-shell summary { width: fit-content; color: var(--secondary); font-size: 12px; cursor: pointer; }
+.rules-capabilities ul { padding: 0; margin: 10px 0 0; list-style: none; }
+.rules-capabilities li { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.rules-capabilities li:last-child { border-bottom: 0; }
+.rules-capabilities li[data-available="false"] { color: var(--muted); }
+.rules-capabilities small { color: var(--muted); font-size: 11px; }
+.rules-advanced .rules-fields { margin-top: 13px; }
+.rules-note { margin: 0 0 14px; color: var(--secondary); font-size: 12px; line-height: 1.8; }
+.rules-editor-actions { padding: 16px 20px; border-top: 1px solid var(--border); background: var(--surface-muted); }
+.rules-editor-actions > p { margin: 0 0 12px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.rules-editor-actions > div { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.rules-editor-actions button { font-size: 12px; }
+.rules-commit { margin-top: 18px; border-color: var(--accent); }
+.rules-commit-body { padding: 18px 20px; }
+.rules-commit-body > p:first-child { margin: 0 0 8px; font-size: 13px; }
+.rules-evidence { margin: 0 0 16px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.rules-inline-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.rules-inspect { margin-top: 22px; }
+.rules-inspect .panel-heading { align-items: start; flex-wrap: wrap; gap: 10px; }
+.rules-inspect .eyebrow { margin-bottom: 3px; font-size: 11px; letter-spacing: .5px; }
+.rules-safe-label { flex-shrink: 0; padding: 4px 9px; border-radius: 5px; background: var(--accent-soft); color: var(--accent); font-size: 11px; }
+.rules-inspect-body { padding: 18px 20px; }
+.rules-inspect-actions { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-top: 15px; }
+.rules-inspect-actions .field-hint { margin: 0; }
+.rules-inspect-actions button { font-size: 12px; }
+.rules-decisions { margin-top: 18px; padding-top: 4px; border-top: 1px solid var(--border); }
+.rules-decision { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.rules-decision:last-child { border-bottom: 0; }
+.rules-decision strong { font-size: 13px; font-weight: 600; }
+.rules-decision p { margin: 4px 0 0; color: var(--secondary); font-size: 12px; }
+.rules-decision[data-ready="true"] strong { color: var(--accent); }
+.rules-record { display: flex; justify-content: space-between; align-items: baseline; gap: 15px; padding: 15px 20px; border-bottom: 1px solid var(--border); }
+.rules-record:last-child { border-bottom: 0; }
+.rules-record strong { font-size: 13px; font-weight: 600; }
+.rules-record p { margin: 3px 0 0; color: var(--secondary); font-size: 12px; overflow-wrap: anywhere; }
+.rules-record time { flex-shrink: 0; color: var(--muted); font-size: 11px; }
+.rules-records-empty { margin: 0; padding: 22px 20px; color: var(--muted); font-size: 12px; }
+.rules-footer { margin-top: 24px; }
+@media (max-width: 820px) {
+  .rules-shell { padding-right: 24px; padding-left: 24px; }
+  .rules-workspace { grid-template-columns: minmax(0, 1fr); }
+  .rules-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rules-rule { border-right: 1px solid var(--border); }
+  .rules-rule:nth-child(even) { border-right: 0; }
+  .rules-rule:last-child { border-bottom: 1px solid var(--border); }
+  .rules-editor-empty { min-height: 180px; }
+}
+@media (max-width: 520px) {
+  .rules-shell { padding-right: 18px; padding-left: 18px; }
+  .rules-list { display: block; }
+  .rules-rule { border-right: 0; }
+  .rules-rule:last-child { border-bottom: 0; }
+  .rules-identity { flex-direction: column; gap: 12px; padding: 16px; }
+  .rules-identity > .field { width: 100%; }
+  .rules-check { margin-top: 0; }
+  .rules-step, .rules-editor-actions, .rules-inspect-body, .rules-commit-body { padding-right: 16px; padding-left: 16px; }
+  .rules-fields { grid-template-columns: minmax(0, 1fr); }
+  .rules-inspect-actions { flex-direction: column; align-items: flex-start; }
+  .rules-record { flex-direction: column; align-items: flex-start; gap: 5px; padding: 15px 16px; }
+  .rules-editor-actions > div { justify-content: flex-start; }
+  .rules-flow i { margin: 0 8px; }
+}

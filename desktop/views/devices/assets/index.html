@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="{{.Catalog.Locale}}" data-theme="{{.Theme}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="devices.title">{{tr "devices.title"}}</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/devices-assets/devices.css" />
+    {{catalog}}
+    <script src="/devices-assets/devices.js" defer></script>
+  </head>
+  <body>
+    <div class="shell devices-shell">
+      <header class="app-header">
+        <a class="brand brand-link" href="/" aria-label="{{tr "nav.brand"}}" data-i18n-aria-label="nav.brand">
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><rect x="4" y="6" width="19" height="14" rx="3"/><path d="M11 25h12M17 20v5M27 12v10a3 3 0 0 1-3 3"/></svg></span>
+          <span>DisplayKVM</span>
+        </a>
+        <nav class="connection-actions page-navigation" aria-label="{{tr "nav.label"}}" data-i18n-aria-label="nav.label">
+          <a class="button-text" href="/devices/" aria-current="page">{{t "nav.devices"}}</a>
+          <a class="button-text" href="/targets/">{{t "nav.targets"}}</a>
+          <a class="button-text" href="/rules/">{{t "nav.rules"}}</a>
+        </nav>
+      </header>
+
+      <main class="main-content">
+        <div class="page-heading">
+          <div><p class="eyebrow">{{t "devices.eyebrow"}}</p><h1>{{t "nav.devices"}}</h1><p class="page-description">{{t "devices.description"}}</p></div>
+          <form action="/devices/scan" method="post"><button class="button-secondary" type="submit" {{if not .CanScan}}disabled{{end}}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M16.5 8a6.5 6.5 0 1 0-1 6.2M16.5 3.5V8H12"/></svg>{{t "devices.scan"}}</button></form>
+        </div>
+
+        <section class="connection-strip" data-connected="{{.Connected}}" aria-label="{{tr "devices.connection"}}" data-i18n-aria-label="devices.connection">
+          <div class="connection-title"><span class="status-dot" aria-hidden="true"></span><div><h2>{{if .Connected}}{{t "app.connection.connected"}}{{else}}{{t "app.connection.disconnected"}}{{end}}</h2><p>{{msg .Catalog .Connection}}</p>{{template "diagnostic" .ConnectionDiagnostic}}</div></div>
+          <a class="button-text" href="/">{{t "devices.overview"}}</a>
+        </section>
+        {{if .Error.Key}}<div class="error-message" role="alert">{{msg .Catalog .Error}}{{if .ErrorCause.Key}} {{msg .Catalog .ErrorCause}}{{end}}{{template "diagnostic" .ErrorDiagnostic}}</div>{{end}}
+        {{if .Notice.Key}}<p class="notice-message" role="status" aria-live="polite">{{msg .Catalog .Notice}}</p>{{end}}
+
+        <ol class="setup-steps" aria-label="{{tr "devices.steps"}}" data-i18n-aria-label="devices.steps">
+          <li><span>01</span>{{t "devices.step_scan"}}</li><li><span>02</span>{{t "devices.step_bind"}}</li><li><span>03</span>{{t "devices.step_prepare"}}</li><li><span>04</span>{{t "devices.step_trial"}}</li><li><span>05</span>{{t "devices.step_name"}}</li>
+        </ol>
+
+        <div class="devices-layout">
+          <aside class="device-panel device-sidebar" aria-labelledby="devices-heading">
+            <div class="panel-heading"><h2 id="devices-heading">{{t "devices.your_displays"}}</h2><span class="panel-caption">{{m "devices.display_count" "count" (number (len .Displays))}}</span></div>
+            <ul class="device-choices">
+              {{range .Displays}}<li><a class="device-choice" href="{{.URL}}" {{if .Selected}}aria-current="true"{{end}}><span class="display-icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><rect x="5" y="6" width="22" height="16" rx="3"/><path d="M16 22v5M11 27h10"/></svg></span><span class="device-choice-copy"><strong>{{.Name}}</strong><span>{{if .LogicalID}}{{m "devices.logical_id" "id" .LogicalID}}{{else}}{{.Detail}}{{end}}</span><span class="device-state">{{msg $.Catalog .State}}</span></span></a>{{template "diagnostic" .Diagnostic}}</li>{{end}}
+            </ul>
+            {{if not .Displays}}<div class="empty-state compact-empty"><span class="empty-monitor" aria-hidden="true">▱</span><h3>{{t "devices.empty_title"}}</h3><p>{{t "devices.empty_scan"}}<br />{{t "devices.empty_keep"}}</p></div>{{end}}
+            <div class="panel-footer"><p>{{t "devices.screen_number_note"}}</p></div>
+          </aside>
+
+          <div class="device-detail">
+            {{if .HasSelection}}
+            <section class="device-panel" aria-labelledby="binding-heading">
+              <div class="panel-heading"><div><p class="eyebrow">02 / {{t "devices.step_bind"}}</p><h2 id="binding-heading">{{.SelectedName}}</h2></div><span class="panel-caption">{{t "devices.confirm_device"}}</span></div>
+              <div class="section-body">
+                {{if .IdentityIssue.Key}}<p class="boundary-note" role="status">{{msg .Catalog .IdentityIssue}}</p>{{template "diagnostic" .IdentityDiagnostic}}{{else}}<p class="section-description">{{t "devices.identity_guide"}}</p>{{end}}
+                <form action="/devices/bind" method="post" class="stack-form">
+                  <input type="hidden" name="display_id" value="{{.Draft.DisplayID}}" />
+                  <div class="field"><label for="backend-id">{{t "devices.bind_device"}}</label><select id="backend-id" name="backend_id" required {{if not .CanBind}}disabled{{end}}><option value="" data-i18n="devices.choose_device">{{tr "devices.choose_device"}}</option>{{range .Candidates}}<option value="{{.ID}}" {{if .Selected}}selected{{end}}>{{.Name}} · {{.Detail}}</option>{{end}}</select></div>
+                  <div class="field"><label for="display-name">{{t "devices.display_name"}}</label><input id="display-name" name="name" value="{{.Draft.Name}}" maxlength="256" required placeholder="{{tr "devices.display_name_placeholder"}}" data-i18n-placeholder="devices.display_name_placeholder" {{if not .CanBind}}disabled{{end}} /></div>
+                  <label class="check-field"><input type="checkbox" name="confirmed" value="true" required {{if not .CanBind}}disabled{{end}} /><span>{{t "devices.bind_confirmation"}}</span></label>
+                  <div class="form-bottom"><p>{{t "devices.bind_preview_note"}}</p><button class="button-secondary" type="submit" {{if not .CanBind}}disabled{{end}}>{{t "devices.bind_preview"}}</button></div>
+                </form>
+              </div>
+            </section>
+
+            <section class="device-panel" aria-labelledby="prepare-heading">
+              <div class="panel-heading"><div><p class="eyebrow">03 / {{t "devices.step_prepare"}}</p><h2 id="prepare-heading">{{t "devices.return_title"}}</h2></div></div>
+              <div class="section-body"><div class="return-guide"><span class="info-symbol" aria-hidden="true">i</span><div><strong>{{t "devices.return_key"}}</strong><p>{{t "devices.return_note"}}</p></div></div><form action="/devices/inspect" method="post" class="prepare-diagnostic"><input type="hidden" name="display_id" value="{{.Draft.DisplayID}}" /><button class="button-secondary" type="submit" {{if or (not .Connected) .Busy}}disabled{{end}}>{{t "devices.inspect_current"}}</button></form></div>
+            </section>
+
+            <section class="device-panel" aria-labelledby="trial-heading">
+              <div class="panel-heading"><div><p class="eyebrow">04 / {{t "devices.step_trial"}}</p><h2 id="trial-heading">{{t "devices.trial_title"}}</h2></div></div>
+              <div class="section-body">
+                <p class="section-description">{{t "targets.preview.device_navigation"}}</p>
+                <div class="action-row">{{range .Targets}}<a class="button-secondary" href="/targets/?target={{urlquery .ID}}">{{.Name}} · {{t "targets.preview.open"}}</a>{{else}}<a class="button-secondary" href="/targets/">{{t "targets.preview.save_first"}}</a>{{end}}</div>
+                {{if .Trial}}
+                <p class="boundary-note">{{t "targets.preview.legacy_note"}}</p>
+                <div class="trial-progress" role="status"><strong>{{msg .Catalog .Trial.Summary}}</strong>{{if .Trial.Running}}<p>{{t "devices.trial_running"}}</p>{{end}}</div>
+                <ul class="trial-results" aria-label="{{tr "devices.trial_evidence"}}" data-i18n-aria-label="devices.trial_evidence">
+                  {{range .Trial.Results}}<li><div class="evidence-title"><h3>{{.Name}}</h3><span class="state-label">{{msg $.Catalog .Status}}</span></div><dl class="evidence-grid"><div><dt>{{t "devices.send_result"}}</dt><dd>{{msg $.Catalog .Sent}}</dd></div><div><dt>{{t "devices.input_readback"}}</dt><dd>{{msg $.Catalog .Readback}}</dd></div><div><dt>{{t "devices.picture_confirmation"}}</dt><dd>{{msg $.Catalog .Observation}}</dd></div></dl><p class="request-reference">{{m "devices.request_id" "id" .RequestID}}</p>{{if .Issue.Key}}<p class="boundary-note">{{msg $.Catalog .Issue}}</p>{{end}}{{template "diagnostic" .Diagnostic}}{{if .CanConfirm}}<form action="/devices/trial/confirm" method="post"><input type="hidden" name="index" value="{{.Index}}" /><input type="hidden" name="request_id" value="{{.RequestID}}" /><input type="hidden" name="confirmed" value="true" /><button class="button-secondary" type="submit">{{t "devices.picture_seen"}}</button></form>{{end}}</li>{{end}}
+                </ul>
+                <div class="action-row">{{if .Trial.CanStep}}<form action="/devices/trial/step" method="post"><label class="check-field"><input type="checkbox" name="confirmed" value="true" required /><span>{{t "devices.next_confirmation"}}</span></label><button class="button-primary" type="submit">{{t "devices.next_send"}}</button></form>{{end}}{{if .Trial.CanStop}}<form action="/devices/trial/stop" method="post"><button class="button-secondary" type="submit">{{t "devices.stop"}}</button></form>{{end}}<a class="button-text" href="/devices/?display={{urlquery .Draft.DisplayID}}">{{t "devices.trial_query"}}</a></div>
+                {{end}}
+              </div>
+            </section>
+
+            <section class="device-panel" aria-labelledby="calibration-heading">
+              <div class="panel-heading"><div><p class="eyebrow">05 / {{t "devices.step_name"}}</p><h2 id="calibration-heading">{{t "devices.calibration_title"}}</h2></div></div>
+              <div class="section-body">
+                <p class="section-description">{{msg .Catalog .CalibrationHint}}</p>
+                {{if .Recorded}}<div class="recorded-calibrations"><h3>{{t "devices.recorded_names"}}</h3>{{range .Recorded}}<div class="recorded-input"><strong>{{.Name}}</strong><dl class="evidence-grid"><div><dt>{{t "devices.target_input"}}</dt><dd>{{.Target}} · {{.Input}}</dd></div><div><dt>{{t "devices.calibration_basis"}}</dt><dd>{{msg $.Catalog .Basis}}</dd></div><div><dt>{{t "devices.confirmed_at"}}</dt><dd>{{if .Confirmed}}{{.Confirmed}}{{else}}{{t "devices.confirmed_time_unknown"}}{{end}}</dd></div></dl></div>{{end}}</div>{{end}}
+                <form action="/devices/calibration/prepare" method="post" class="stack-form">
+                  <input type="hidden" name="display_id" value="{{.Draft.DisplayID}}" />
+                  <div class="form-grid"><div class="field"><label for="target-id">{{t "devices.assigned_target"}}</label><select id="target-id" name="target_id" {{if not .CanCalibrate}}disabled{{end}}><option value="" data-i18n="devices.new_target">{{tr "devices.new_target"}}</option>{{range .CalibrationTargets}}<option value="{{.ID}}" {{if .Selected}}selected{{end}}>{{.Name}}</option>{{end}}</select></div><div class="field"><label for="port-name">{{t "devices.port_name"}}</label><input id="port-name" name="port_name" value="{{.Draft.PortName}}" required maxlength="256" placeholder="{{tr "devices.port_name_placeholder"}}" data-i18n-placeholder="devices.port_name_placeholder" {{if not .CanCalibrate}}disabled{{end}} /></div></div>
+                  <details class="manual-input" open><summary>{{t "devices.input_parameters"}}</summary><p class="field-hint">{{t "devices.parameters_note"}}</p><div class="form-grid"><div class="field"><label for="input-protocol">{{t "devices.input_protocol"}}</label><select id="input-protocol" name="protocol" required {{if not .CanCalibrate}}disabled{{end}}><option value="vcp" data-i18n="devices.protocol_vcp" {{if eq .Draft.Protocol "vcp"}}selected{{end}}>{{tr "devices.protocol_vcp"}}</option><option value="lg_input_alt" data-i18n="devices.protocol_lg" {{if eq .Draft.Protocol "lg_input_alt"}}selected{{end}}>{{tr "devices.protocol_lg"}}</option></select></div><div class="field"><label for="input-value">{{t "devices.input_value"}}</label><input id="input-value" name="value" value="{{.Draft.Value}}" required maxlength="8" placeholder="{{tr "devices.input_value_placeholder"}}" data-i18n-placeholder="devices.input_value_placeholder" {{if not .CanCalibrate}}disabled{{end}} /></div></div></details>
+                  <div class="form-bottom"><p>{{t "devices.calibration_prepare_note"}}</p><button class="button-secondary" type="submit" {{if not .CanCalibrate}}disabled{{end}}>{{t "devices.calibration_preview"}}</button></div>
+                </form>
+                {{if .Calibration}}<div class="calibration-preview"><h3>{{t "devices.calibration_check"}}</h3><dl class="evidence-grid"><div><dt>{{t "devices.port_name"}}</dt><dd>{{.Calibration.Name}}</dd></div><div><dt>{{t "devices.target"}}</dt><dd>{{.Calibration.Target}}</dd></div><div><dt>{{t "devices.input_parameters"}}</dt><dd>{{.Calibration.Protocol}} / {{.Calibration.Value}}</dd></div><div><dt>{{t "devices.calibration_basis"}}</dt><dd>{{msg .Catalog .Calibration.Basis}}</dd></div></dl>{{if .Calibration.Diagnostic}}<p class="boundary-note">{{t (errorKey .Calibration.Diagnostic.Code)}}</p>{{template "diagnostic" .Calibration.Diagnostic}}{{end}}<p class="field-hint">{{t "devices.calibration_readback_note"}}</p><form action="/devices/calibration/save" method="post" class="stack-form"><label class="check-field"><input type="checkbox" name="confirmed" value="true" required {{if not .Calibration.CanSave}}disabled{{end}} /><span>{{t "devices.calibration_confirmation"}}</span></label><div class="action-row"><button class="button-primary" type="submit" {{if not .Calibration.CanSave}}disabled{{end}}>{{t "devices.save_preview"}}</button></div></form></div>{{end}}
+                {{if .Calibration}}<form action="/devices/calibration/cancel" method="post" class="cancel-calibration"><button class="button-text" type="submit">{{t "devices.calibration_cancel"}}</button><span class="field-hint">{{t "devices.calibration_cancel_note"}}</span></form>{{end}}
+              </div>
+            </section>
+            {{else}}
+            <section class="device-panel selection-empty"><div class="empty-state"><span class="empty-monitor" aria-hidden="true">▱</span><h2>{{t "devices.select_title"}}</h2><p>{{t "devices.select_scan"}}<br />{{t "devices.select_identity"}}</p></div></section>
+            {{end}}
+
+            {{if .Save}}<section class="device-panel save-panel" aria-labelledby="save-heading"><div class="panel-heading"><h2 id="save-heading">{{t "devices.commit_title"}}</h2><span class="state-label">{{msg .Catalog .Save.Status}}</span></div><div class="section-body"><p class="section-description">{{t "devices.saved_label"}}{{msg .Catalog .Save.Saved}}{{t "devices.effective_label"}}{{msg .Catalog .Save.Effective}}{{t "devices.version_note"}}{{if .Save.Diagnostic}}{{t (errorKey .Save.Diagnostic.Code)}}{{end}}</p>{{template "diagnostic" .Save.Diagnostic}}<p class="commit-reference">{{t "devices.commit_id"}}<code>{{.Save.CommitID}}</code></p><p class="field-hint">{{t "devices.commit_note"}}</p><div class="action-row">{{if .Save.CanApply}}<form action="/devices/save/apply" method="post"><input type="hidden" name="commit_id" value="{{.Save.CommitID}}" /><label class="check-field"><input type="checkbox" name="confirmed" value="true" required /><span>{{t "devices.apply_confirmation"}}</span></label><button class="button-primary" type="submit">{{t "devices.apply"}}</button></form>{{end}}{{if .Save.CanQuery}}<form action="/devices/save/query" method="post"><input type="hidden" name="commit_id" value="{{.Save.CommitID}}" /><button class="button-secondary" type="submit">{{t "devices.commit_query"}}</button></form>{{else}}<form action="/devices/reconnect" method="post"><button class="button-secondary" type="submit">{{t "devices.reconnect"}}</button></form>{{end}}</div></div></section>{{end}}
+
+            <details class="device-panel diagnostics-panel"><summary><span>{{t "devices.advanced"}}</span><span class="panel-caption">{{t "devices.advanced_description"}}</span></summary><div class="section-body">{{if .Diagnostic}}<dl class="diagnostic-grid"><div><dt>{{t "devices.backend"}}</dt><dd>{{msg .Catalog .Diagnostic.Backend}}</dd></div><div><dt>{{t "devices.identity"}}</dt><dd>{{msg .Catalog .Diagnostic.Identity}}</dd></div><div><dt>{{t "devices.capabilities"}}</dt><dd>{{if .Diagnostic.Protocols}}{{.Diagnostic.Protocols}}{{else}}{{msg .Catalog .Diagnostic.Capabilities}}{{end}}</dd></div><div><dt>{{t "devices.current_readback"}}</dt><dd>{{msg .Catalog .Diagnostic.Readback}}</dd></div><div><dt>{{t "devices.readback_basis"}}</dt><dd>{{msg .Catalog .Diagnostic.ReadbackBasis}}</dd></div></dl>{{range .Diagnostic.Issues}}<p class="boundary-note">{{t (errorKey .Code)}}</p>{{template "diagnostic" .}}{{end}}{{if .Diagnostic.UnavailableReason}}<details class="original-diagnostic"><summary>{{t "common.original_detail"}}</summary><p>{{.Diagnostic.UnavailableReason}}</p></details>{{end}}{{else}}<p class="section-description">{{t "devices.diagnostic_empty"}}</p>{{end}}<form action="/devices/inspect" method="post"><input type="hidden" name="display_id" value="{{.Draft.DisplayID}}" /><button class="button-secondary" type="submit" {{if or (not .HasSelection) (not .Connected) .Busy}}disabled{{end}}>{{t "devices.inspect"}}</button></form></div></details>
+          </div>
+        </div>
+      </main>
+      <p id="devices-operation" class="refresh-message" role="status" aria-live="polite" hidden></p>
+      <footer class="app-footer"><span>{{t "devices.footer_service"}}</span><span>{{t "devices.footer_confirmation"}}</span></footer>
+    </div>
+  </body>
+</html>

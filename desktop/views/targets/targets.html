@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="targets.page_title">{{tr "targets.page_title"}}</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="{{.ResourcePath}}/targets.css">
+  {{catalog}}
+  <script src="{{.ResourcePath}}/targets.js" defer></script>
+</head>
+<body>
+<main class="shell targets-page" data-dirty="{{.Dirty}}">
+  <header class="page-heading targets-heading">
+    <div>
+      <p class="eyebrow">{{t "targets.eyebrow"}}</p>
+      <h1>{{t "targets.title"}}</h1>
+      <p class="page-description">{{t "targets.description"}}</p>
+    </div>
+    <div class="targets-heading-meta"><a href="/" class="targets-overview-link">← {{t "nav.back"}}</a><span class="targets-draft-tag">{{if .Save.Locked}}{{t "targets.submission_result"}}{{else if .Dirty}}{{t "targets.unsaved"}}{{else}}{{t "targets.draft"}}{{end}}</span></div>
+  </header>
+
+  <form method="post" action="{{.Endpoint}}" class="targets-reload" data-reload>
+    <input type="hidden" name="revision" value="{{.Revision}}">
+    <button class="button-text" name="action" value="reload" {{if not .CanReload}}disabled{{end}}>{{t "common.reload"}}</button>
+    <span>{{t "targets.reload_hint"}}</span>
+  </form>
+
+  {{if .Error}}<section class="error-message targets-message" role="alert" tabindex="-1" id="targets-error">
+    <strong>{{t (errorKey .Error.Code)}}</strong><p>{{if .ErrorMessageKey}}{{t .ErrorMessageKey}}{{else}}{{t "common.original_detail"}}：{{.Error.Message}}{{end}}</p>
+    {{if .Error.Field}}<p class="targets-error-field">{{t "targets.error_location"}}<code>{{.Error.Field}}</code></p>{{end}}
+    <p>{{if .Save.Locked}}{{t "targets.error_locked"}}{{else if .Ready}}{{t "targets.error_draft"}}{{else}}{{t "targets.error_unready"}}{{end}}</p>
+  </section>{{end}}
+  {{if .Notice}}<p class="targets-notice" role="status">{{t .Notice}}</p>{{end}}
+  {{if .Save.Saved}}<section class="targets-save-state" aria-label="{{tr "targets.save_state"}}" data-i18n-aria-label="targets.save_state" role="status">
+    <div><span class="targets-small-label">{{t "targets.configuration_saved"}}</span><strong>{{t .Save.Saved}}</strong></div>
+    <div><span class="targets-small-label">{{t "targets.runtime_effective"}}</span><strong>{{t .Save.Applied}}</strong></div>
+    <p>{{t .Save.Detail}}</p>
+    {{if .Save.CanQuery}}<form method="post" action="{{.Endpoint}}" data-query>
+      <input type="hidden" name="revision" value="{{.Revision}}">
+      <input type="hidden" name="commit_id" value="{{.Save.CommitID}}">
+      <button class="button-secondary" name="action" value="query">{{t "targets.query"}}</button>
+    </form>{{end}}
+  </section>{{end}}
+
+  <div class="targets-layout">
+    <aside class="targets-sidebar" aria-label="{{tr "targets.configuration_list"}}" data-i18n-aria-label="targets.configuration_list">
+      <section class="targets-list-section" aria-labelledby="groups-heading">
+        <div class="targets-list-heading"><h2 id="groups-heading">{{t "targets.groups"}} <span>{{len .Groups}}</span></h2>
+          <form method="post" action="{{.Endpoint}}" data-leave-editor>
+            <input type="hidden" name="revision" value="{{.Revision}}"><input type="hidden" name="kind" value="group">
+            <button class="button-text" name="action" value="add" {{if or (not .Ready) .Save.Locked}}disabled{{end}} aria-label="{{tr "targets.add_group"}}" data-i18n-aria-label="targets.add_group">{{t "targets.add"}}</button>
+          </form>
+        </div>
+        <ul class="targets-items">{{range .Groups}}<li><form method="post" action="{{$.Endpoint}}" data-leave-editor>
+          <input type="hidden" name="revision" value="{{$.Revision}}"><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="id" value="{{.ID}}">
+          <button class="targets-item" name="action" value="select" {{if .Selected}}aria-current="true"{{end}} {{if $.Save.Locked}}disabled{{end}}>
+            <span class="targets-item-symbol" aria-hidden="true">▦</span><span><strong>{{.Name}}</strong><small>{{m .Caption "count" .Count}}</small></span><span class="targets-item-arrow" aria-hidden="true">›</span>
+          </button></form></li>{{else}}<li class="targets-list-empty">{{t "targets.groups_empty"}}</li>{{end}}
+        </ul>
+      </section>
+      <section class="targets-list-section" aria-labelledby="targets-heading">
+        <div class="targets-list-heading"><h2 id="targets-heading">{{t "targets.targets"}} <span>{{len .Targets}}</span></h2>
+          <form method="post" action="{{.Endpoint}}" data-leave-editor>
+            <input type="hidden" name="revision" value="{{.Revision}}"><input type="hidden" name="kind" value="target">
+            <button class="button-text" name="action" value="add" {{if or (not .Ready) .Save.Locked}}disabled{{end}} aria-label="{{tr "targets.add_target"}}" data-i18n-aria-label="targets.add_target">{{t "targets.add"}}</button>
+          </form>
+        </div>
+        <ul class="targets-items">{{range .Targets}}<li><form method="post" action="{{$.Endpoint}}" data-leave-editor>
+          <input type="hidden" name="revision" value="{{$.Revision}}"><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="id" value="{{.ID}}">
+          <button class="targets-item" name="action" value="select" {{if .Selected}}aria-current="true"{{end}} {{if $.Save.Locked}}disabled{{end}}>
+            <span class="targets-item-symbol" aria-hidden="true">↗</span><span><strong>{{.Name}}</strong><small>{{m .Caption "count" .Count}}</small></span><span class="targets-item-arrow" aria-hidden="true">›</span>
+          </button></form></li>{{else}}<li class="targets-list-empty">{{t "targets.targets_empty"}}</li>{{end}}
+        </ul>
+      </section>
+      <p class="targets-sidebar-note">{{t "targets.draft_hint"}}</p>
+    </aside>
+
+    <section class="targets-editor" aria-labelledby="editor-heading">
+    {{if .Editor}}
+      <form method="post" action="{{.Endpoint}}" id="targets-editor-form">
+        <input type="hidden" name="revision" value="{{.Revision}}"><input type="hidden" name="kind" value="{{.Editor.Kind}}"><input type="hidden" name="id" value="{{.Editor.ID}}">
+        <div class="targets-editor-heading"><div><p class="eyebrow">{{if eq .Editor.Kind "group"}}{{t "targets.group_members"}}{{else}}{{t "targets.input_mapping"}}{{end}}</p><h2 id="editor-heading">{{t .Editor.Title}}</h2><p>{{t .Editor.Caption}}</p></div></div>
+        <fieldset class="targets-fields" {{if or (not .Ready) .Save.Locked}}disabled{{end}}>
+          <div class="field targets-name-field"><label for="targets-name">{{if eq .Editor.Kind "group"}}{{t "targets.group_name"}}{{else}}{{t "targets.target_name"}}{{end}}</label><input id="targets-name" name="name" value="{{.Editor.Name}}" autocomplete="off"><small>{{t "targets.name_hint"}}</small></div>
+          <div class="targets-mapping-heading"><h3>{{if eq .Editor.Kind "group"}}{{t "targets.included_displays"}}{{else}}{{t "targets.display_inputs"}}{{end}}</h3><span>{{m "targets.configured_count" "count" (number (len .Editor.Displays))}}</span></div>
+          <div class="targets-screen-list">
+          {{range .Editor.Displays}}
+            <article class="targets-screen" data-display-id="{{.ID}}" data-mapped="{{.Mapped}}" data-presence="{{.Presence.Tone}}">
+              <div class="targets-screen-main">
+                {{if eq $.Editor.Kind "group"}}<label class="targets-member"><input type="checkbox" name="display_id" value="{{.ID}}" {{if .Member}}checked{{end}}><span><strong>{{.Name}}</strong><small>{{.ID}}</small></span></label>{{else}}<div class="targets-screen-name"><strong>{{.Name}}</strong><small>{{.ID}}</small></div>{{end}}
+                <span class="targets-presence" data-tone="{{.Presence.Tone}}">{{t .Presence.Label}}</span>
+              </div>
+              {{if .Presence.DetailKey}}<p class="targets-screen-detail">{{t .Presence.DetailKey}}</p>{{else if .Presence.Diagnostic}}<p class="targets-screen-detail">{{t (errorKey .Presence.Diagnostic.Code)}}</p>{{else if .Presence.Detail}}<p class="targets-screen-detail">{{.Presence.Detail}}</p>{{end}}
+              {{with .Presence.Diagnostic}}<div class="targets-screen-detail"><p>{{t "common.original_detail"}}</p><pre data-diagnostic-code="{{.Code}}">code: {{.Code}}
+message: {{.Message}}
+field: {{.Field}}
+retryable: {{.Retryable}}
+detail: {{.Detail}}</pre></div>{{end}}
+              {{if .OtherGroups}}<p class="targets-screen-detail">{{m "targets.other_groups" "groups" .OtherGroups}}</p>{{end}}
+              {{if eq $.Editor.Kind "target"}}
+                <div class="targets-mapping-control"><label for="mapping-{{.ID}}">{{t "targets.input_scheme"}}</label><select id="mapping-{{.ID}}" name="mapping.{{.ID}}" aria-describedby="mapping-note-{{.ID}}">
+                  <option value="" {{if not .Mapped}}selected{{end}} data-i18n="targets.unmapped_option">{{tr "targets.unmapped_option"}}</option>{{range .Schemes}}<option value="{{.ID}}" {{if .Selected}}selected{{end}} {{if .LabelKey}}data-i18n="{{.LabelKey}}" data-i18n-values="{{.Values}}"{{end}}>{{.Label}}</option>{{end}}
+                </select></div>
+                <p id="mapping-note-{{.ID}}" class="targets-mapping-note">{{if .Mapped}}{{t "targets.mapped_hint"}}{{else}}{{t "targets.unmapped_hint"}}{{end}}</p>
+              {{end}}
+            </article>
+          {{else}}<div class="targets-empty-inline"><strong>{{t "targets.displays_empty"}}</strong><p>{{t "targets.displays_empty_hint"}}</p></div>{{end}}
+          </div>
+          <div class="targets-edit-actions"><div class="targets-draft-actions"><button class="button-secondary" name="action" value="update">{{t "targets.keep_draft"}}</button><button class="button-text" name="action" value="check">{{t "targets.check"}}</button></div><button class="button-text targets-delete" name="action" value="remove" formnovalidate data-remove>{{if eq .Editor.Kind "group"}}{{t "targets.remove_group"}}{{else}}{{t "targets.remove_target"}}{{end}}</button></div>
+        </fieldset>
+        <footer class="targets-editor-footer"><div><strong>{{if .Save.Locked}}{{t "targets.view_submission"}}{{else if .Dirty}}{{t "targets.changes_unsaved"}}{{else}}{{t "targets.changes_draft"}}{{end}}</strong><p>{{t "targets.save_hint"}}</p><p>{{t "targets.format_hint"}}</p></div><div class="targets-footer-actions"><button class="button-secondary" name="action" value="cancel" formnovalidate data-cancel {{if .Save.Locked}}disabled{{end}}>{{t "targets.cancel_all"}}</button><button class="button-primary" name="action" value="save" {{if or (not .Ready) .Save.Locked}}disabled{{end}}>{{t "targets.save_apply"}}</button></div></footer>
+      </form>
+    {{else}}
+      <div class="targets-editor-empty"><span class="targets-empty-icon" aria-hidden="true">▦</span><h2 id="editor-heading">{{if .Ready}}{{t "targets.select_prompt"}}{{else}}{{t "targets.wait_connection"}}{{end}}</h2><p>{{if .Ready}}{{t "targets.select_hint"}}{{else}}{{t "targets.connection_hint"}}{{end}}</p></div>
+      {{if .Dirty}}<form method="post" action="{{.Endpoint}}" class="targets-empty-actions"><input type="hidden" name="revision" value="{{.Revision}}"><button class="button-secondary" name="action" value="cancel" data-cancel {{if .Save.Locked}}disabled{{end}}>{{t "targets.cancel_all"}}</button><button class="button-primary" name="action" value="save" {{if .Save.Locked}}disabled{{end}}>{{t "targets.save_apply"}}</button></form>{{end}}
+    {{end}}
+      {{with .Preview}}<section id="input-preview" class="targets-preview" aria-labelledby="preview-heading" data-active="{{.Active}}" data-unknown="{{.Unknown}}" data-session="{{.SessionID}}" data-target="{{.TargetID}}" data-hold-until="{{.HoldUntil}}" data-can-start="{{.CanStart}}">
+        <div class="targets-preview-heading"><div><p class="eyebrow">{{t "targets.preview.eyebrow"}}</p><h2 id="preview-heading">{{t "targets.preview.title"}}</h2></div><span class="targets-draft-tag">{{t "targets.preview.duration"}}</span></div>
+        <p class="targets-preview-description">{{t "targets.preview.description"}}</p>
+        <p class="targets-preview-boundary">{{t "targets.preview.boundary"}}</p>
+        <div class="targets-preview-actions">
+          <form method="post" action="{{$.Endpoint}}" data-preview-start>
+            <input type="hidden" name="revision" value="{{$.Revision}}"><input type="hidden" name="target_id" value="{{.TargetID}}">
+            <button class="button-primary" name="action" value="preview_start" {{if not .CanStart}}disabled{{end}} aria-describedby="preview-start-hint">{{t "targets.preview.start"}}</button>
+          </form>
+          <p id="preview-start-hint" data-preview-hint>{{t .Hint}}</p>
+        </div>
+        <div class="targets-preview-status" role="status" aria-live="polite" aria-atomic="true">
+          {{if .StateKey}}<strong data-preview-state>{{t .StateKey}}</strong>{{else}}<strong data-preview-state>{{t "targets.preview.idle"}}</strong>{{end}}
+          {{if .PhaseKey}}<p data-preview-phase>{{t .PhaseKey}}{{if .ActiveDisplayID}} · <code>{{.ActiveDisplayID}}</code>{{end}}</p>{{end}}
+          <p data-preview-countdown {{if not .HoldUntil}}hidden{{end}}>{{t "targets.preview.waiting_restore"}}</p>
+          <p data-preview-connection hidden>{{t "targets.preview.unknown_hint"}}</p>
+        </div>
+        {{if .SessionID}}<p class="targets-preview-reference">{{t "targets.preview.session"}} <code>{{.SessionID}}</code></p>{{end}}
+        {{if .Unknown}}<p class="targets-preview-boundary">{{t "targets.preview.last_evidence"}}</p>{{end}}
+        {{with .Error}}<div class="targets-preview-error" role="alert"><strong>{{t (errorKey .Code)}}</strong><p>{{if eq .Message "targets.preview.error.receipt"}}{{t .Message}}{{else if eq .Message "targets.preview.error.session"}}{{t .Message}}{{else}}{{t "common.original_detail"}}：{{.Message}}{{end}}</p></div>{{end}}
+        {{if .Rows}}<ul class="targets-preview-results" aria-label="{{tr "targets.preview.results"}}" data-i18n-aria-label="targets.preview.results">
+          {{range .Rows}}<li data-preview-display="{{.ID}}"><div class="targets-preview-screen"><strong>{{.Name}}</strong><code>{{.ID}}</code></div>
+            <dl class="targets-preview-values"><div><dt>{{t "targets.preview.original"}}</dt><dd data-preview-original>{{if .OriginalKnown}}{{.Original}}{{else}}{{t "common.unknown"}}{{end}}</dd></div><div><dt>{{t "targets.preview.target"}}</dt><dd>{{.Target}}</dd></div><div><dt>{{t "targets.preview.observed"}}</dt><dd>{{if .ObservedKnown}}{{.Observed}}{{else}}{{t "common.unknown"}}{{end}}</dd></div></dl>
+            <dl class="targets-preview-evidence"><div><dt>{{t "targets.preview.switch_result"}}</dt><dd>{{t .SwitchKey}}</dd></div><div><dt>{{t "targets.preview.restore_result"}}</dt><dd>{{t .RestoreKey}}</dd></div></dl>
+            {{if .Detail}}<p class="targets-preview-detail">{{.Detail}}</p>{{end}}
+          </li>{{end}}
+        </ul>{{end}}
+        <form method="get" action="{{$.Endpoint}}" data-preview-query><input type="hidden" name="preview_status" value="1"><input type="hidden" name="preview_session" value="{{.SessionID}}"><input type="hidden" name="target" value="{{.TargetID}}"><button class="button-text">{{t "targets.preview.query"}}</button></form>
+      </section>{{end}}
+    </section>
+  </div>
+</main>
+</body>
+</html>

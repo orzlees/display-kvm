@@ -1,0 +1,58 @@
+name: 手动构建候选产物
+
+"on":
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [darwin-amd64, darwin-arm64, linux-amd64, linux-arm64, windows-amd64, windows-arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          check-latest: false
+          cache: false
+      - name: 离线交叉构建与许可包装
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+          BUILD_RUN_ID: ci-core-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          sh build/build-core.sh --target "$BUILD_TARGET" --version 0.0.1-dev --run-id "$BUILD_RUN_ID"
+          sh packaging/package.sh core --run-id "$BUILD_RUN_ID"
+
+  desktop-macos-arm64:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          check-latest: false
+          cache: false
+      - name: 确认原生arm64并显式预取锁定依赖
+        run: |
+          test "$(uname -m)" = arm64
+          export GOENV=off GOWORK=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly
+          export GOMODCACHE="$PWD/desktop/.cache/gomod" GOCACHE="$PWD/desktop/.cache/build"
+          export GOTMPDIR="$PWD/desktop/.cache/tmp" TMPDIR="$PWD/desktop/.cache/tmp"
+          export GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org
+          mkdir -p "$GOMODCACHE" "$GOCACHE" "$GOTMPDIR"
+          go -C desktop mod download github.com/wailsapp/wails/v3@v3.1.0 github.com/coder/websocket@v1.8.15 github.com/ebitengine/purego@v0.11.3 github.com/go-ole/go-ole@v1.3.0 github.com/godbus/dbus/v5@v5.2.4 golang.org/x/sys@v0.49.0 golang.org/x/term@v0.47.0
+      - name: 原生桌面构建与只读成品包装
+        env:
+          BUILD_RUN_ID: ci-desktop-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          sh desktop/build-macos.sh
+          sh packaging/package.sh desktop --app desktop/bin/DisplayKvm.app --run-id "$BUILD_RUN_ID"

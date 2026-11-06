@@ -1,0 +1,54 @@
+# 构建缓存、候选程序集和本地验证记录
+/desktop/.cache/
+/desktop/bin/
+/build/out/
+/docs/verification/
+/.cache/
+.codegraph/
+/docs/任务计划/.task-series.lock/
+
+# 本地配置、凭据和签名私钥
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+/settings.json
+/settings.local.json
+/displaykvm-settings.json
+/credentials/
+/credentials*.json
+/secrets/
+/secrets.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.keystore
+*.mobileprovision
+
+# 日志、编辑器备份和临时文件
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+*.orig
+*.rej
+.idea/
+.vscode/
+*.xcuserstate
+xcuserdata/
+*.dSYM/
+
+# macOS 系统生成文件，可位于任意层目录
+.DS_Store
+.AppleDouble/
+.LSOverride
+._*
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
+.TemporaryItems/
+.apdisk

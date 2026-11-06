@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="{{tr "language.locale"}}" data-theme="system">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="settings.window_title">{{tr "settings.window_title"}}</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/startup-assets/startup.css">
+  {{catalog}}
+  <script src="/startup-assets/startup.js" defer></script>
+</head>
+<body>
+<main class="shell startup-page" data-dirty="{{.Dirty}}">
+  <header class="page-heading startup-heading">
+    <div><p class="eyebrow">{{t "settings.eyebrow"}}</p><h1>{{t "nav.settings"}}</h1><p class="page-description">{{t "settings.description"}}</p></div>
+    <a href="/" class="button-text startup-back">{{t "nav.back"}}</a>
+  </header>
+  {{if or .ReadError .Problems}}<section class="error-message startup-message" role="alert" tabindex="-1" id="startup-error">
+    <strong>{{if .ReadError}}{{t "settings.read_partial"}}{{else}}{{t "settings.operation_failed"}}{{end}}</strong>
+    {{if .ReadError}}{{if .ReadDiagnostic}}<p data-error-code="{{.ReadDiagnostic.Code}}">{{t (errorKey .ReadDiagnostic.Code)}}</p><p>{{t "common.original_detail"}}: {{.ReadError}}</p>{{else}}<p>{{t .ReadError}}</p>{{end}}<p>{{t "settings.partial_hint"}}</p>{{end}}
+    {{range .Problems}}{{if .Diagnostic}}<p data-error-code="{{.Diagnostic.Code}}">{{t (errorKey .Diagnostic.Code)}}</p><p>{{t "common.original_detail"}}: {{.Message}}</p>{{else}}<p>{{t .Message}}</p>{{end}}{{end}}
+  </section>{{end}}
+  {{if .Notice}}<p class="startup-notice" role="status">{{t .Notice}}</p>{{end}}
+  <form method="post" action="/startup/" id="startup-form">
+    <input type="hidden" name="revision" value="{{.Revision}}">
+    <section class="startup-panel" aria-labelledby="startup-files-heading">
+      <div class="startup-panel-heading"><div><h2 id="startup-files-heading">{{t "settings.configuration"}}</h2><p>{{t "settings.configuration_hint"}}</p></div></div>
+      <div class="startup-file-body startup-path">
+        <div class="startup-file-actions"><button class="button-secondary" name="action" value="new_config" formnovalidate {{if not .CanSaveFile}}disabled{{end}}>{{t "settings.new"}}</button><button class="button-secondary" name="action" value="choose_config" formnovalidate {{if .FileUnknown}}disabled{{end}}>{{t "settings.load"}}</button></div>
+        {{if .Path}}<p class="startup-file-label">{{if .UnsavedDocument}}{{t "settings.previous_location"}}{{else}}{{t "settings.current_file"}}{{end}}</p><p class="startup-file-location">{{.Path}}</p>{{else}}<p class="startup-empty">{{t "settings.no_file"}}</p>{{end}}
+        {{if .UnsavedDocument}}<p class="startup-detail">{{t "settings.unsaved_document"}}</p>{{end}}
+        {{if .DocumentError}}<p class="startup-field-error">{{t .DocumentError}}</p>{{end}}
+        {{if not .CanPick}}<label class="startup-file-label" for="startup-config-path">{{t "settings.absolute_path"}}</label><div class="startup-path-control"><input id="startup-config-path" type="text" name="config_path" autocomplete="off" spellcheck="false" placeholder="{{tr "settings.path_placeholder"}}" data-i18n-placeholder="settings.path_placeholder"></div>{{end}}
+        <p class="startup-detail">{{t "settings.load_hint"}}</p>
+        <div class="startup-file-actions startup-document-actions"><button class="button-text" name="action" value="save_as" formnovalidate {{if not .CanSaveFile}}disabled{{end}}>{{t "settings.save_as"}}</button><button class="button-text" name="action" value="reload_file" formnovalidate>{{t "settings.read_file"}}</button></div>
+        {{if .PendingPath}}<div class="startup-overwrite" role="alert"><strong>{{t "settings.overwrite_title"}}</strong><p>{{.PendingPath}}</p><p>{{t "settings.overwrite_hint"}}</p><div class="startup-file-actions"><button class="button-secondary" name="action" value="cancel_overwrite" formnovalidate>{{t "settings.keep_original"}}</button><button class="button-primary" name="action" value="confirm_overwrite">{{t "settings.confirm_overwrite"}}</button></div></div>{{end}}
+        {{if .FileUnknown}}<p class="startup-field-error">{{t "settings.file_unknown_hint"}}</p>{{end}}
+      </div>
+      <fieldset class="startup-fields" {{if not .CanEdit}}disabled{{end}}>
+        <legend>{{t "settings.language"}}</legend>
+        <div class="field"><label for="startup-language">{{t "settings.language"}}</label><select id="startup-language" name="language" aria-describedby="startup-language-hint"><option value="system" data-i18n="settings.language.system" {{if eq .Language "system"}}selected{{end}}>{{tr "settings.language.system"}}</option><option value="zh-CN" data-i18n="settings.language.zh" {{if eq .Language "zh-CN"}}selected{{end}}>{{tr "settings.language.zh"}}</option><option value="en" data-i18n="settings.language.en" {{if eq .Language "en"}}selected{{end}}>{{tr "settings.language.en"}}</option></select><small id="startup-language-hint">{{t "settings.language_hint"}}</small></div>
+      </fieldset>
+    </section>
+    <section class="startup-panel" aria-labelledby="startup-login-heading">
+      <div class="startup-panel-heading"><h2 id="startup-login-heading">{{t "settings.automatic_start"}}</h2><button class="button-text" name="action" value="reload" formnovalidate data-reload>{{t "settings.read_state"}}</button></div>
+      <div class="startup-toggles">
+        {{range .Toggles}}<div class="startup-toggle">
+          <label class="startup-check"><input type="checkbox" name="{{.Name}}" value="1" {{if .Checked}}checked{{end}} {{if not .Editable}}disabled{{end}} aria-describedby="{{.Name}}-description {{.Name}}-actual"><span>{{t .Label}}</span></label>
+          <p id="{{.Name}}-description" class="startup-toggle-description">{{t .Description}}</p>
+          <p id="{{.Name}}-actual" class="startup-actual">{{t .Label}}: {{t .Actual}}</p>
+          {{if .Detail}}<p class="startup-detail">{{t "common.original_detail"}}: {{t .Detail}}</p>{{end}}
+        </div>{{end}}
+      </div>
+      <p class="startup-panel-note">{{t "settings.login_hint"}}</p>
+    </section>
+    <section class="startup-saved" aria-labelledby="startup-saved-heading">
+      <h2 id="startup-saved-heading">{{t "settings.current_state"}}</h2>
+      <p class="startup-detail">{{t "settings.state_hint"}}</p>
+      <p class="startup-actual">{{t .Parameters}}</p>{{if .ParametersDetail}}<p class="startup-detail">{{.ParametersDetail}}</p>{{end}}
+      {{if .Results}}<ul class="startup-results" aria-label="{{tr "settings.results"}}" data-i18n-aria-label="settings.results">{{range .Results}}<li>{{t .Label}}: {{t .Status}}{{if .Diagnostic}} · {{t (errorKey .Diagnostic.Code)}} · {{t "common.original_detail"}}: {{.Diagnostic.Detail}}{{else}}{{if .Detail}} · {{t .Detail}}{{end}}{{end}}</li>{{end}}</ul>{{end}}
+      {{if .Uncertain}}<p class="startup-field-error">{{t "settings.unknown_hint"}}</p>{{end}}
+      <p>{{t "settings.save_hint"}}</p><p>{{t "settings.current_service_hint"}}</p>
+    </section>
+    <footer class="startup-footer"><span id="startup-draft-state" role="status">{{if .Dirty}}{{t "common.pending"}}{{else}}{{t "common.clean"}}{{end}}</span><div class="startup-actions"><button class="button-secondary" name="action" value="cancel" formnovalidate data-cancel>{{t "common.cancel"}}</button><button class="button-primary" name="action" value="save" {{if not .CanSave}}disabled{{end}}>{{t "common.save"}}</button></div></footer>
+    <p id="startup-progress" class="startup-progress" role="status" hidden>{{t "common.processing"}}</p>
+  </form>
+</main>
+</body>
+</html>

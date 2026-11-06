@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleName</key>
+    <string>DisplayKVM</string>
+    <key>CFBundleDisplayName</key>
+    <string>DisplayKVM</string>
+    <key>CFBundleExecutable</key>
+    <string>displaykvm</string>
+    <key>CFBundleIdentifier</key>
+    <string>io.github.orzlee.displaykvm</string>
+    <key>CFBundleVersion</key>
+    <string>0.0.1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.0.1</string>
+    <!-- 当前 Go 1.27.3 产物最低要求 macOS 13，与构建脚本的 C/链接目标一致。
+         不能沿用上游 Wails 模板的 12.0 声明；这不会改变 go.mod 的最低 Go 版本。
+         官方依据：https://go.dev/doc/go1.27 的 Ports / Darwin。 -->
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+  </dict>
+</plist>

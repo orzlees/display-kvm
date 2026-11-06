@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "minimum_go": "1.26.10",
+  "build_go": "1.27.3",
+  "wails": "3.1.0",
+  "core": {
+    "cgo_enabled": "0",
+    "tags": [],
+    "flags": ["-mod=readonly", "-trimpath", "-buildvcs=false"],
+    "programs": [
+      {"name": "displaykvm", "package": "./cmd/displaykvm"},
+      {"name": "displaykvmd", "package": "./cmd/displaykvmd"}
+    ],
+    "targets": [
+      {"id": "darwin-amd64", "goos": "darwin", "goarch": "amd64", "archive": "tar.gz", "status": "candidate", "limitations": "macOS Intel显示器控制后端不适用；未验证安装运行与硬件"},
+      {"id": "darwin-arm64", "goos": "darwin", "goarch": "arm64", "archive": "tar.gz", "status": "candidate", "limitations": "用户自备m1ddc；未验证真实显示器链路"},
+      {"id": "linux-amd64", "goos": "linux", "goarch": "amd64", "archive": "tar.gz", "status": "candidate", "limitations": "用户自备ddcutil；3.0.2仅源码格式适配；未验证Linux安装运行与硬件"},
+      {"id": "linux-arm64", "goos": "linux", "goarch": "arm64", "archive": "tar.gz", "status": "candidate", "limitations": "用户自备ddcutil；3.0.2仅源码格式适配；未验证Linux安装运行与硬件"},
+      {"id": "windows-amd64", "goos": "windows", "goarch": "amd64", "archive": "zip", "status": "candidate", "limitations": "原生显示器传输、IPC目录ACL与单实例保护未提供；后台及连接拒绝启动"},
+      {"id": "windows-arm64", "goos": "windows", "goarch": "arm64", "archive": "zip", "status": "candidate", "limitations": "原生显示器传输、IPC目录ACL与单实例保护未提供；后台及连接拒绝启动"}
+    ]
+  },
+  "desktop": {
+    "targets": [{"id": "darwin-arm64", "goos": "darwin", "goarch": "arm64", "cgo_enabled": "1", "tags": ["production"], "entry": "sh desktop/build-macos.sh", "app": "desktop/bin/DisplayKvm.app", "status": "native-build-entry", "minimum_macos_declaration": "13.0.0", "signing": "local-ad-hoc", "limitations": "原脚本不检查实际Go版本；包装检查二进制Go1.27.3及实际Info.plist；发布签名、公证与硬件未验证"}],
+    "other_targets": "Windows/Linux及macOS Intel桌面无已验证构建运行记录"
+  },
+  "output_root": "build/out/<run-id>",
+  "distribution_status": "候选构建准备；许可齐备不等于平台、签名或硬件验收通过"
+}

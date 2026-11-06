@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="rules.page_title">{{tr "rules.page_title"}}</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/rules-assets/assets/rules.css">
+  {{catalog}}
+  <script src="/rules-assets/assets/rules.js" defer></script>
+</head>
+<body>
+  <div class="shell rules-shell">
+    <header class="app-header">
+      <a class="brand rules-brand" href="/" aria-label="{{tr "nav.back"}}" data-i18n-aria-label="nav.back">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><rect x="3" y="5" width="26" height="18" rx="3"/><path d="M11 28h10M16 23v5M10 12h12m-4-4 4 4-4 4"/></svg></span>
+        DisplayKVM
+      </a>
+      <a class="rules-back" href="/">{{t "nav.back"}} <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main class="main-content">
+      <div class="page-heading">
+        <div><p class="eyebrow">{{t "rules.eyebrow"}}</p><h1>{{t "rules.title"}}</h1><p class="page-description">{{t "rules.description"}}</p></div>
+        <button id="new-rule" class="button-primary" type="button" disabled><span aria-hidden="true">＋</span> {{t "rules.new"}}</button>
+      </div>
+
+      <section class="connection-strip" aria-label="{{tr "rules.connection_state"}}" data-i18n-aria-label="rules.connection_state" id="connection" data-connected="false">
+        <div class="connection-title"><span class="status-dot" aria-hidden="true"></span><div><h2 id="connection-title" data-i18n="rules.loading">{{tr "rules.loading"}}</h2><p id="connection-detail" data-i18n="rules.capabilities_source">{{tr "rules.capabilities_source"}}</p></div></div>
+        <button id="refresh" class="button-text" type="button">{{t "rules.refresh"}}</button>
+      </section>
+      <p id="message" class="refresh-message" role="status" aria-live="polite"></p>
+      <div id="error" class="error-message" role="alert" hidden></div>
+
+      <div class="rules-workspace">
+        <section class="device-panel rules-library" aria-labelledby="library-title">
+          <div class="panel-heading"><h2 id="library-title">{{t "rules.library"}} <span id="rule-count" class="rules-count">—</span></h2><span class="panel-caption">{{t "rules.toggle_hint"}}</span></div>
+          <ol id="rule-list" class="rules-list"></ol>
+          <div id="empty-rules" class="empty-state rules-empty" hidden><span class="rules-empty-mark" aria-hidden="true">↳</span><h3>{{t "rules.empty"}}</h3><p>{{t "rules.empty_hint"}}<br>{{t "rules.empty_save"}}</p></div>
+        </section>
+
+        <section class="rules-editor device-panel" aria-labelledby="editor-title">
+          <div class="panel-heading"><div><p class="eyebrow">{{t "rules.draft"}}</p><h2 id="editor-title" data-i18n="rules.select_hint">{{tr "rules.select_hint"}}</h2></div><span id="draft-tag" class="state-label" hidden>{{t "rules.unsaved"}}</span></div>
+          <div id="editor-placeholder" class="empty-state rules-editor-empty"><span class="rules-flow" aria-hidden="true">{{t "rules.event_label"}} <i>→</i> {{t "rules.conditions"}} <i>→</i> {{t "rules.action"}}</span><p>{{t "rules.editor_hint"}}</p></div>
+          <form id="rule-form" hidden novalidate>
+            <div class="rules-identity">
+              <div class="field"><label for="rule-id">{{t "rules.id"}}</label><input id="rule-id" name="id" autocomplete="off" placeholder="{{tr "rules.id_placeholder"}}" data-i18n-placeholder="rules.id_placeholder" required><p class="field-hint">{{t "rules.id_hint"}}</p></div>
+              <label class="rules-check"><input id="rule-enabled" type="checkbox"><span>{{t "rules.enable_after_save"}}</span></label>
+            </div>
+
+            <fieldset class="rules-step"><legend><span class="step-number">01</span> {{t "rules.when"}}</legend>
+              <div class="field"><label for="event-kind">{{t "rules.event_label"}}</label><select id="event-kind" required></select><p id="event-reason" class="field-hint"></p></div>
+              <details class="rules-capabilities"><summary>{{t "rules.view_capabilities"}}</summary><ul id="capability-list"></ul></details>
+            </fieldset>
+
+            <fieldset class="rules-step"><legend><span class="step-number">02</span> {{t "rules.which_conditions"}}</legend>
+              <p id="condition-notice" class="rules-note" hidden></p>
+              <div class="rules-fields">
+                <div class="field" data-filter="source"><label for="event-source">{{t "rules.source"}}</label><input id="event-source" autocomplete="off" placeholder="{{tr "rules.source_placeholder"}}" data-i18n-placeholder="rules.source_placeholder"></div>
+                <div class="field" data-filter="name"><label for="event-name">{{t "rules.event_name"}}</label><input id="event-name" autocomplete="off" placeholder="{{tr "rules.name_placeholder"}}" data-i18n-placeholder="rules.name_placeholder"></div>
+                <div class="field" data-filter="usb.vendor_id"><label for="usb-vendor">{{t "rules.usb_vendor"}}</label><input id="usb-vendor" type="number" min="0" max="65535" step="1" inputmode="numeric" placeholder="{{tr "rules.usb_id_placeholder"}}" data-i18n-placeholder="rules.usb_id_placeholder"></div>
+                <div class="field" data-filter="usb.product_id"><label for="usb-product">{{t "rules.usb_product"}}</label><input id="usb-product" type="number" min="0" max="65535" step="1" inputmode="numeric" placeholder="{{tr "rules.usb_id_placeholder"}}" data-i18n-placeholder="rules.usb_id_placeholder"></div>
+                <div class="field" data-filter="usb.serial"><label for="usb-serial">{{t "rules.usb_serial"}}</label><input id="usb-serial" autocomplete="off" placeholder="{{tr "rules.usb_serial_placeholder"}}" data-i18n-placeholder="rules.usb_serial_placeholder"></div>
+                <div class="field" data-filter="usb.path"><label for="usb-path">{{t "rules.usb_path"}}</label><input id="usb-path" autocomplete="off" placeholder="{{tr "rules.usb_path_placeholder"}}" data-i18n-placeholder="rules.usb_path_placeholder"></div>
+                <div class="field rules-field-wide" data-filter="attributes"><label for="event-attributes">{{t "rules.attributes"}}</label><textarea id="event-attributes" rows="2" spellcheck="false" placeholder='{"mode":"work"}'></textarea><p class="field-hint">{{t "rules.attributes_hint"}}</p></div>
+              </div>
+            </fieldset>
+
+            <fieldset class="rules-step"><legend><span class="step-number">03</span> {{t "rules.which_action"}}</legend>
+              <div class="rules-fields">
+                <div class="field rules-field-wide"><label for="target-id">{{t "rules.target"}}</label><select id="target-id" required></select></div>
+                <div class="field"><label for="scope-kind">{{t "rules.scope"}}</label><select id="scope-kind"><option value="target" data-i18n="rules.scope_target">{{tr "rules.scope_target"}}</option><option value="group" data-i18n="rules.scope_group">{{tr "rules.scope_group"}}</option><option value="displays" data-i18n="rules.scope_displays">{{tr "rules.scope_displays"}}</option></select></div>
+                <div class="field" id="group-field" hidden><label for="group-id">{{t "targets.groups"}}</label><select id="group-id"></select></div>
+                <div class="field rules-field-wide" id="displays-field" hidden><label for="display-ids">{{t "rules.displays"}}</label><select id="display-ids" multiple size="3"></select><p class="field-hint">{{t "rules.displays_hint"}}</p></div>
+              </div>
+              <details class="rules-advanced"><summary>{{t "rules.advanced"}}</summary><div class="rules-fields">
+                <div class="field"><label for="rule-priority">{{t "rules.priority"}}</label><input id="rule-priority" type="number" step="1" value="0"></div>
+                <div class="field"><label for="rule-debounce">{{t "rules.debounce"}}</label><input id="rule-debounce" type="number" min="0" step="1" value="0"></div>
+                <div class="field"><label for="rule-cooldown">{{t "rules.cooldown"}}</label><input id="rule-cooldown" type="number" min="0" step="1" value="0"></div>
+              </div><p class="field-hint">{{t "rules.advanced_hint"}}</p></details>
+            </fieldset>
+
+            <div class="rules-editor-actions"><p id="draft-detail" data-i18n="rules.draft_unsubmitted">{{tr "rules.draft_unsubmitted"}}</p><div><button id="cancel-draft" class="button-text" type="button">{{t "common.cancel"}}</button><button id="validate-draft" class="button-secondary" type="button">{{t "rules.validate"}}</button><button id="prepare-save" class="button-primary" type="submit">{{t "rules.review_save"}}</button></div></div>
+          </form>
+        </section>
+      </div>
+
+      <section id="commit-panel" class="rules-commit device-panel" aria-labelledby="commit-title" hidden>
+        <div class="panel-heading"><h2 id="commit-title">{{t "rules.confirm_changes"}}</h2><span id="commit-label" class="state-label" data-i18n="common.pending">{{tr "common.pending"}}</span></div>
+        <div class="rules-commit-body"><p id="commit-detail"></p><p id="commit-id" class="rules-evidence"></p><div class="rules-inline-actions"><button id="apply-save" class="button-primary" type="button" hidden>{{t "rules.confirm_save"}}</button><button id="query-save" class="button-secondary" type="button" hidden>{{t "rules.query_save"}}</button><button id="dismiss-save" class="button-text" type="button" hidden>{{t "rules.dismiss_save"}}</button></div></div>
+      </section>
+
+      <section class="device-panel rules-inspect" aria-labelledby="inspect-title">
+        <div class="panel-heading"><div><p class="eyebrow">{{t "rules.inspect"}}</p><h2 id="inspect-title">{{t "rules.inspect_title"}}</h2></div><span class="rules-safe-label">{{t "rules.inspect_safe"}}</span></div>
+        <div class="rules-inspect-body"><p class="rules-note">{{t "rules.inspect_hint"}}</p>
+          <form id="preview-form" novalidate>
+            <div class="rules-fields">
+              <div class="field"><label for="preview-kind">{{t "rules.simulated_event"}}</label><select id="preview-kind"></select></div>
+              <div class="field"><label for="preview-source">{{t "rules.source"}}</label><input id="preview-source" autocomplete="off" placeholder="{{tr "rules.preview_source_placeholder"}}" data-i18n-placeholder="rules.preview_source_placeholder" required></div>
+              <div class="field"><label for="preview-name">{{t "rules.event_name"}}</label><input id="preview-name" autocomplete="off" placeholder="{{tr "rules.preview_name_placeholder"}}" data-i18n-placeholder="rules.preview_name_placeholder"></div>
+              <div class="field"><label for="preview-time">{{t "rules.observed_at"}}</label><input id="preview-time" type="datetime-local" step="1" required></div>
+              <div class="field rules-field-wide"><label for="preview-usb">{{t "rules.preview_usb"}}</label><textarea id="preview-usb" rows="2" spellcheck="false" placeholder='{"vendor_id":1234,"product_id":5678,"serial":"","path":""}'></textarea></div>
+              <div class="field rules-field-wide"><label for="preview-attributes">{{t "rules.preview_attributes"}}</label><textarea id="preview-attributes" rows="2" spellcheck="false" placeholder="{}"></textarea></div>
+            </div><div class="rules-inspect-actions"><p class="field-hint">{{t "rules.preview_hint"}}</p><button id="preview-rule" class="button-secondary" type="submit" disabled>{{t "rules.preview"}} <span aria-hidden="true">↗</span></button></div>
+          </form>
+          <div id="preview-results" class="rules-decisions" aria-live="polite" hidden></div>
+        </div>
+      </section>
+
+      <section class="device-panel results-panel" aria-labelledby="records-title"><div class="panel-heading"><h2 id="records-title">{{t "rules.records_title"}}</h2><span class="panel-caption">{{t "rules.records_source"}}</span></div><ol id="record-list" class="rules-records"></ol><p id="empty-records" class="rules-records-empty" data-i18n="rules.records_unread">{{tr "rules.records_unread"}}</p></section>
+    </main>
+    <footer class="app-footer rules-footer"><span>{{t "rules.footer_title"}}</span><span>{{t "rules.footer_hint"}}</span></footer>
+  </div>
+  <template id="rule-row"><li class="rules-rule"><div class="rules-rule-top"><strong class="rules-rule-id"></strong><span class="rules-rule-status"></span></div><p class="rules-rule-summary"></p><p class="rules-rule-last"></p><div class="rules-rule-actions"><button class="button-text rules-edit" type="button">{{t "rules.edit"}}</button><button class="button-text rules-toggle" type="button"></button></div></li></template>
+</body>
+</html>
