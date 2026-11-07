@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sync/atomic"
 	"testing"
 
@@ -50,7 +51,7 @@ func unifiedRuntimeFixture(t *testing.T) (*runtimeManager, settings.Document, st
 	m, _, _, root, _ := managementFixture(t)
 	document := m.settingsSnapshot.Document
 	document.Schedules = []scheduler.Schedule{{ID: "initial", Enabled: false, Time: "09:00", Timezone: "UTC"}}
-	resolver, resolved := settingsProductTools(t, "linux", filepath.Join(root, "bundle"))
+	resolver, resolved := settingsProductTools(t, runtime.GOOS, filepath.Join(root, "bundle"))
 	document.Runtime = settings.RuntimeSettings{}
 	document.Desktop.Language = "en"
 	managementSetDocument(t, m, document)
@@ -184,6 +185,7 @@ func TestUnifiedSettingsFailedSaveReloadsOnlyCompleteDocument(t *testing.T) {
 		})
 	}
 	m, document, root := unifiedRuntimeFixture(t)
+	beforeReload := m.settingsSnapshot.Document
 	document.Runtime.ToolPath = filepath.Join(root, "changed-tool")
 	if err := os.WriteFile(document.Runtime.ToolPath, []byte("fixture"), 0700); err != nil {
 		t.Fatal(err)
@@ -195,8 +197,19 @@ func TestUnifiedSettingsFailedSaveReloadsOnlyCompleteDocument(t *testing.T) {
 	if err := os.WriteFile(m.opts.settingsPath, encoded.Bytes(), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := m.reload(); err == nil {
-		t.Fatal("实际工具变化仍复用旧后端恢复")
+	_, _, _, reloadErr := m.reload()
+	if runtime.GOOS == "windows" {
+		// Windows原生控制不绑定外部工具；历史覆盖可以变化，重读仍须保留原字段，
+		// 且不能将文档覆盖写成当前后端的实际工具路径。
+		if reloadErr != nil || !reflect.DeepEqual(m.settingsSnapshot.Document, document) || m.opts.toolPath != "" || m.opts.busctlPath != "" || m.opts.udevadmPath != "" {
+			t.Fatalf("Windows历史工具覆盖影响原生重读或丢失字段: document=%+v err=%v", m.settingsSnapshot.Document, reloadErr)
+		}
+	} else if reloadErr == nil || !reflect.DeepEqual(m.settingsSnapshot.Document, beforeReload) {
+		t.Fatalf("实际工具变化仍复用旧后端恢复或改写运行快照: %v", reloadErr)
+	}
+	afterReload, err := os.ReadFile(m.opts.settingsPath)
+	if err != nil || !bytes.Equal(afterReload, encoded.Bytes()) {
+		t.Fatal("重读工具字段改写了磁盘完整文档")
 	}
 	if err := os.WriteFile(m.opts.settingsPath, []byte(`{"kind":"displaykvm-settings","version":1}`), 0600); err != nil {
 		t.Fatal(err)

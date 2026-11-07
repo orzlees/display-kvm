@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -390,11 +391,25 @@ func managementFixture(t *testing.T) (*runtimeManager, config.Config, []automati
 	if err != nil {
 		t.Fatal(err)
 	}
-	path, tool := filepath.Join(root, "settings.json"), filepath.Join(root, "tool")
-	resolver := controltools.Resolver{GOOS: "darwin", Executable: filepath.Join(root, "displaykvmd")}
-	for _, executable := range []string{tool, resolver.Executable} {
-		if err := os.WriteFile(executable, []byte("fixture"), 0700); err != nil {
-			t.Fatal(err)
+	path := filepath.Join(root, "settings.json")
+	resolver := controltools.Resolver{GOOS: runtime.GOOS, Executable: filepath.Join(root, "displaykvmd")}
+	paths := controltools.Paths{}
+	switch runtime.GOOS {
+	case "darwin":
+		paths.ToolPath = filepath.Join(root, "tool")
+	case "linux":
+		paths = controltools.Paths{ToolPath: filepath.Join(root, "ddcutil"), BusctlPath: filepath.Join(root, "busctl"), UdevadmPath: filepath.Join(root, "udevadm")}
+	case "windows":
+		// Windows原生控制不依赖外部工具，也没有POSIX执行位。文档与运行选项必须
+		// 使用同一份路径，否则失败保存后的真实重读会误判后端工具发生变化。
+	default:
+		t.Fatalf("不支持的管理测试平台: %s", runtime.GOOS)
+	}
+	for _, executable := range []string{resolver.Executable, paths.ToolPath, paths.BusctlPath, paths.UdevadmPath} {
+		if executable != "" {
+			if err := os.WriteFile(executable, []byte("fixture"), 0700); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	store, err := settings.NewStore(settings.Options{Environment: func() (settings.Environment, error) {
@@ -422,10 +437,10 @@ func managementFixture(t *testing.T) (*runtimeManager, config.Config, []automati
 		}
 	})
 	physical := &managementBackend{value: 17}
-	m := newRuntimeManager(options{settingsPath: path, toolPath: tool, toolResolver: resolver}, instance, physical, nil)
+	m := newRuntimeManager(options{settingsPath: path, toolPath: paths.ToolPath, busctlPath: paths.BusctlPath, udevadmPath: paths.UdevadmPath, toolResolver: resolver}, instance, physical, nil)
 	m.settingsWriter, m.saveSettings = writer, writer.Save
 	document := settings.NewDocument()
-	document.Configuration, document.Rules, document.Runtime.ToolPath = cfg, rules, tool
+	document.Configuration, document.Rules, document.Runtime = cfg, rules, paths
 	managementSetDocument(t, m, document)
 	m.registerSources = func(*daemon.Daemon, options) error { return nil }
 	return m, cfg, rules, root, physical

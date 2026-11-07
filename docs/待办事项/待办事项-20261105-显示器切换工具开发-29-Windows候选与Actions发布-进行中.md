@@ -5,14 +5,14 @@
 - 项目归属：`/Users/orzlee/work/project/other/displayKvm`，工作名称 displayKvm
 - 总计划：[显示器切换工具开发](../任务计划/【20261105-显示器切换工具开发】.md)
 - 批准设计：[显示器控制与交付缺口补全设计](../superpowers/specs/2026-11-07-display-control-completion-design.md)
-- 对应需求：补全设计 R7；状态：进行中（rc8两Windows root Go exit1，目录同步/工具fixture权限两类有限失败；原单workflow静态PASS保留，desktop未知、下游SKIP，发布未完成）
-- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T17:55:00+08:00（父补24六文件局部独验终态，不是完成时刻）
+- 对应需求：补全设计 R7；状态：进行中（rc9真实FAIL/下游SKIP保留；24三测试文件STOP、A1–A4局部独验PASS，rc10 Git/nativeCI/九档/双端实际下载待验，交付未完成）
+- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T20:03:54+08:00（父补24三测试文件STOP/局部独验终态，不是完成时刻）
 - 实际完成时间：未完成；权威完成字段为本字段，归档时间另记
 - 当前文件位置：`docs/待办事项/待办事项-20261105-显示器切换工具开发-29-Windows候选与Actions发布-进行中.md`
 - 所属系列主会话 ID：`ses_e4cc8a233ffeDDjHm7v7yPI8S3`；文档执行者：`ses_e4ca67d8affe48ddN4S1MR1ZXf`
-- 专属实施子代理会话：`ses_e4c2221a5ffe465gK11LdyFkpr`，新单workflow extra1已STOP；原独验 `ses_e4bff311bffetgk8CWAyNcrqpC` 本轮A1 scope/A2三变量/A3 finally错误流/A4安全清理static PASS，diff/diffcheck/YAML/结构检查exit0，无本机native PS/Go执行。rc7失败与各旧静态/定向结论及计数保留，静态PASS不代替真实rc8
+- 专属实施子代理会话：`ses_e4c2221a5ffe465gK11LdyFkpr`，既有单workflow extra1已STOP；原独验 `ses_e4bff311bffetgk8CWAyNcrqpC` 当轮A1 scope/A2三变量/A3 finally错误流/A4安全清理static PASS，diff/diffcheck/YAML/结构检查exit0，无本机native PS/Go执行。该历史结论与计数保留，不套作当前24三测试文件extra1通过；本轮29无新实施/验证或workflow写域
 - 执行批次/并行组：补全第2组/共享脚本串行接管28，先于30
-- 本次选中范围：25、26、27、28、29、30及24软件验证部分；rc8真实FAIL及单workflow静态PASS保留。24六文件实施STOP/原24局部独验A1–A5 PASS，后续rc9推送及真实原生/九档产物下载已授权待执行，非完整候选通过；29原实施仍STOP，不扩workflow/门控或其它29文件。旧两轮/历次extras不重置，本轮失败无自动再修，不预填rc9 SHA/runURL/可下载，usage README缺口不改/重启30
+- 本次选中范围：25、26、27、28、29、30及24软件验证部分；本extra1三tests已STOP、原24独验A1–A4局部PASS，rc10推送及原生CI/九档/Windows与Mac实际下载已授权但Git/SHA/run尚未执行。29仍STOP、不扩workflow/门控/其它文件，旧两轮/各extras与rc9/旧局部证据保留，本轮失败先报告，不预填native PASS/可下载，usage README缺口不改/重启30
 - 授权依据与停止边界：用户2026-11-07已通过 question 明确批准“按设计实施”；本任务已获准修改workflow与脚本，实现artifact上传和Release发布入口；实现入口不等于已执行发布。本轮不实际推送、触发Actions或创建Release，实际外部执行及下载核对在24软件验证阶段按已有授权和届时明确指令执行。各角色仅执行本编号，不扩到其他任务；终点为真实硬件验收准备，不提交、不新增安装器、不操作硬件。
 - 版本背景：主会话转交分支 `feat/display-control-completion`、基点 `f26ecf2`；文档执行者未执行 Git 核验或改变 Git 状态
 - 历史路径迁移状态：2026-11-07随开工从未完成后缀改为进行中后缀，不覆盖目标并同步链接；01–23归档身份和历史证据不改
@@ -135,7 +135,7 @@ Windows GUI+daemon+CLI配套，amd64/arm64支持程度依据实际证据；增�
 ## rc8真实结果（发布受阻，仅只读定位）
 
 - [run42358339526](https://github.com/orzlees/display-kvm/actions/runs/42358339526)，commit `737c7554dedf262adb098f4c76df9836526ed4fb`、tag `v0.0.1-rc.20261107.8` 已真推，run终态FAIL；Windows amd64 job128361230903、arm64 job128361231127均root Go exit1。有限annotations两类分别为cmd/displaykvmd的完整文档夹具“同步保存目录失败，须核对实际文件”和internal/settings的GOOSlinux Resolver/Windows mode夹具“当前程序没有可执行权限”，完整错误/证据集中见[24 rc8记录](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。底层dir.Sync errno/完整失败清单/desktop执行状态未知，不能跨package误归或把拒旧-config文本当根因。
-- 原29三变量A1–A4 static PASS及rc8真实失败保留，旧两Linux仅tools PASS、下游SKIP/无九档下载事实不覆盖。24六文件实施STOP/独验A1–A5局部PASS，host三包race/四Windows compile exit0，PE未运行，精确证据见[24六文件契约](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。rc9提交推送已授权待执行，实际两Windows原生root/desktop、Mac GUI/两Windows GUI、九档SHA/source-version-target/PE/完整许可与下载尚未验，不预填SHA/runURL/Release success；旧次数不重置、本轮失败无自动再修。usage README:86仍未准修；不扩workflow/新Mac入口或改门控，实际DDC/非当前输入切回/USB/login/sleep/GUI/hardware仍未验。四taskdocs合并后正常核验释放本人短锁FREEZE/STOP无待写、父占用保留23/30，后续仅独立Git准确六source+四taskdocs共10paths，待本writer停写后派发；本writer不持锁等CI/计数、不验source/测试/build/Git/API/其它文件或报告。
+- 当前待交付（父转交）：基线仍为commit `33f654380673fdb76c808112b38c776a22453566`/tag9/[run42362288105](https://github.com/orzlees/display-kvm/actions/runs/42362288105) FAIL，两Windows root失败、desktop未知，两Linux仅tools PASS、core/两GUI/release SKIP。随后24三tests实施STOP、独立A1–A4局部PASS；cmd hostrace1包50testevents pass0fail0skip（subtest24已含）及两Windows compile0，PE未执行，精确命令/证据见[24当前契约](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。这不等Windows native root+desktop/Linux最终闭包/MacWin GUI或九档SHA/license/实际下载通过；rc10 Git/SHA/run尚未执行、不标ready/可下载，无九档/Release实物。原局部/静态与全部旧计数保留、本extra1已用，本轮失败先报告无自动再修，29不扩workflow/合同/README/新Mac入口，硬件未验、23/30不归档。四文档必要读回/links后核验释放本人短锁FREEZE/STOP无待写无helper、父占用保留，不持锁等后续；独立Git仅三tests+四docs共7paths，待writer停写后派发，本writer不执行source/tests/build/Git/API/其它文件或报告。
 
 ## 完成、归档与迁移
 
