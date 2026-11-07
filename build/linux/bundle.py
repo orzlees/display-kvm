@@ -399,7 +399,7 @@ def systemd_library(name, library, systemd_build, version, arch, work, log):
             "package_archive": "", "build_path": relative, "original_sha256": sha(actual)}
 
 
-def check_elf(binary, arch, program, work, log):
+def check_elf(binary, arch, program, work, log, context=None):
     with binary.open("rb") as stream:
         header = stream.read(20)
     machine = {"amd64": 62, "arm64": 183}[arch]
@@ -423,7 +423,38 @@ def check_elf(binary, arch, program, work, log):
     headers = command(["readelf", "-lW", binary], work, log)
     interpreters = re.findall(r"Requesting program interpreter: ([^\]]+)", headers)
     if interpreters != ([LOADERS[arch]] if program else []):
-        fail("ELF加载器不符")
+        # 此处是readelf成功后的策略校验，没有失败子进程日志；诊断须保留对象及来源，
+        # 才能区分具体共享库的PT_INTERP内容，不能据此推断它必然是误收的可执行程序。
+        context = context or {}
+        source = context.get("source", {"ddcutil": "ddcutil", "busctl": "systemd", "udevadm": "systemd"}.get(binary.name, "<unknown-source>"))
+        if not isinstance(source, str) or not re.fullmatch(r"systemd|ddcutil|debian-[0-9a-f]{16}", source):
+            source = "<unknown-source>"
+        details = {"kind": "program" if program else "shared",
+                   "file": context.get("file", binary.name if program else "lib/" + binary.name),
+                   "source": source}
+        if source == "systemd" and not program:
+            details["build_path"] = context.get("build_path", "")
+        # 只输出受限相对名；异常上下文不能把宿主绝对路径、URL或认证信息带入stderr。
+        for key in ("file", "build_path"):
+            if key in details:
+                value = details[key]
+                if (not isinstance(value, str) or len(value) > 256
+                        or not re.fullmatch(r"[A-Za-z0-9_+./@-]+", value)
+                        or PurePosixPath(value).is_absolute() or ".." in PurePosixPath(value).parts
+                        or value == "." or PurePosixPath(value).as_posix() != value):
+                    details[key] = "<invalid-relative-path>"
+        actual = []
+        # PT_INTERP是ELF内容，允许显示绝对加载器路径，但不回显URL或userinfo；最多四项，
+        # 每项256字符并逐字段JSON转义，保留总数以识别截断，防止换行和工作流命令注入。
+        for value in interpreters[:4]:
+            value = re.sub(r"(?i)(?:[a-z][a-z0-9+.-]*://|//)[^\s'\"<>]+", "<source-url-redacted>", value)
+            value = re.sub(r"[^\s/'\"<>]*@[^\s'\"<>]+", "<userinfo-redacted>", value)
+            actual.append(value[:256])
+        details.update(arch=arch, elf_type=int.from_bytes(header[16:18], "little"),
+                       actual_interpreters=actual, interpreter_count=len(interpreters),
+                       expected_interpreters=[LOADERS[arch]] if program else [])
+        fail("ELF加载器不符\n" + "\n".join(key + ": " + json.dumps(value, ensure_ascii=False)
+                                          for key, value in details.items()))
 
 
 def generate(args):
@@ -516,7 +547,8 @@ def generate(args):
         dest = payload / "lib" / name
         write(dest, regular(source).read_bytes(), 0o755)
         command(["patchelf", "--set-rpath", "$ORIGIN", dest], work, log)
-        check_elf(dest, args.arch, False, work, log)
+        check_elf(dest, args.arch, False, work, log,
+                  context=dict(metadata, file=dest.relative_to(payload).as_posix()))
         library_records.append(dict(record(dest, payload), **metadata))
     tool_records = []
     for name, source in binaries.items():

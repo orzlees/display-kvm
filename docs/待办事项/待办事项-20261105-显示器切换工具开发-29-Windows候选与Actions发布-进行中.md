@@ -5,14 +5,14 @@
 - 项目归属：`/Users/orzlee/work/project/other/displayKvm`，工作名称 displayKvm
 - 总计划：[显示器切换工具开发](../任务计划/【20261105-显示器切换工具开发】.md)
 - 批准设计：[显示器控制与交付缺口补全设计](../superpowers/specs/2026-11-07-display-control-completion-design.md)
-- 对应需求：补全设计 R7；状态：进行中（新extra1仅Windows测试step、实施STOP；原独验终态A1–A4静态PASS，等待24真实CI；rc4失败及九包/下载/发布缺口保留）
-- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T14:38:17+08:00（父转交新extra1独验终态，不是完成时刻）
+- 对应需求：补全设计 R7；状态：进行中（rc5 guard失败与旧静态PASS保留；本轮仅workflow既有step诊断已交付、实施STOP、A1–A4静态结论PASS已交，非根因修复或原生通过）
+- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T15:16:33+08:00（合并父转交本轮静态结论，不是完成时刻）
 - 实际完成时间：未完成；权威完成字段为本字段，归档时间另记
 - 当前文件位置：`docs/待办事项/待办事项-20261105-显示器切换工具开发-29-Windows候选与Actions发布-进行中.md`
 - 所属系列主会话 ID：`ses_e4cc8a233ffeDDjHm7v7yPI8S3`；文档执行者：`ses_e4ca67d8affe48ddN4S1MR1ZXf`
-- 专属实施子代理会话：`ses_e4c2221a5ffe465gK11LdyFkpr`，新extra1仅Windows-native测试step、终态STOP；原独验 `ses_e4bff311bffetgk8CWAyNcrqpC` 终态A1–A4静态PASS，无本轮动态pwsh。原第1轮软件PASS、第2轮诊断静态PASS/纠正及首次独验 `ses_e4c0fbbb4ffey6Rn74YMyPvUUB` 失败、累计次数保留，新静态PASS不替代原生验收
+- 专属实施子代理会话：`ses_e4c2221a5ffe465gK11LdyFkpr`，本轮仅workflow windows-native step、STOP；原独验 `ses_e4bff311bffetgk8CWAyNcrqpC` A1–A4静态结论PASS已交，actual diff/diffcheck/RubyPsych YAML exit0，最终交付计量尚未提供、不为等计量持锁。前一各轮PASS/纠正及首次独验 `ses_e4c0fbbb4ffey6Rn74YMyPvUUB` 失败与累计次数均保留，无本机pwsh动态
 - 执行批次/并行组：补全第2组/共享脚本串行接管28，先于30
-- 本次选中范围：25、26、27、28、29、30及24软件验证部分；新五文件extra1本任务仅 `.github/workflows/build.yml` 的windows-native测试step，实施及静态独验终态已交付、本次extra1已使用。原两轮及此前各extra1保留不重置，本次失败不授权后续自动修复；不能由静态PASS认定原生/下载通过
+- 本次选中范围：25、26、27、28、29、30及24软件验证部分；本轮两文件诊断extra1已使用，本任务仅 `.github/workflows/build.yml` 现windows-native step:172–404。原自动两轮及所有earlierextra1不重置，再失败无自动更多；不调整所有权、不放宽ELF/安全检查、不扩大测试范围，不预填rc6 SHA/tagpush/runURL，不将静态PASS当可下载候选
 - 授权依据与停止边界：用户2026-11-07已通过 question 明确批准“按设计实施”；本任务已获准修改workflow与脚本，实现artifact上传和Release发布入口；实现入口不等于已执行发布。本轮不实际推送、触发Actions或创建Release，实际外部执行及下载核对在24软件验证阶段按已有授权和届时明确指令执行。各角色仅执行本编号，不扩到其他任务；终点为真实硬件验收准备，不提交、不新增安装器、不操作硬件。
 - 版本背景：主会话转交分支 `feat/display-control-completion`、基点 `f26ecf2`；文档执行者未执行 Git 核验或改变 Git 状态
 - 历史路径迁移状态：2026-11-07随开工从未完成后缀改为进行中后缀，不覆盖目标并同步链接；01–23归档身份和历史证据不改
@@ -99,7 +99,15 @@ Windows GUI+daemon+CLI配套，amd64/arm64支持程度依据实际证据；增�
 - 24额外授权结果：原独验独立执行两包联合hostrace一次exit0，2package+188test pass、0fail/0skip，另Windows双arch每arch两包compile-only共4commands exit0、diffcheck0，两文件实际范围审阅PASS、无缺口，无重跑、生成PE未运行/未打包。历史24两轮不清零，root25包复验只计有因命令复验；本次额外1轮只执行一次、无失败返修，不扩29/28额度，整个24仍未完成。
 - rc3实际结果（父转交）：commit `e3d67c533fe968e0dea4548cb5582ee0481fad0a`、tag `v0.0.1-rc.20261107.3` 已真实推送，对应[run42341866318](https://github.com/orzlees/display-kvm/actions/runs/42341866318)。Windows arm64 job128311118696/amd64 job128311118855原生无屏产品测试root go test exit1，annotations含配置锁路径permission_denied/不可信主体、loginstart `flag provided but not defined: -config`；具体生产/测试归因待查。Linux两arch也失败，prepare成功、core/GUI/release全部skipped，无archive/Release证据；证据为24记录的rc3-ci目录下 `annotations-128311118696.json`、`annotations-128311118855.json`，本角色不读取重验。
 - rc4真实失败（父转交）：commit `fd41e9eeedb76c154fd867ae989e0790ff530907`、tag `v0.0.1-rc.20261107.4` 对应[run42345018809](https://github.com/orzlees/display-kvm/actions/runs/42345018809)，completed/failure。Windows arm64 job128320803866/amd64 job128320803813 root go test exit1，配置锁permission_denied；runner祖先AuthenticatedUsers危险写被现policy真实拒绝，准确ACE/目录见[24当前记录](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。正常AppData生产路径及最终测试环境方案尚未验，不称纯fixture或已修产品，`-config` Usage为测试故意拒旧参数。Linux两arch亦失败，prepare PASS，core/WinGUI/MacGUI/release skipped，无九包/artifact/Release/下载hash；真实rc4-ci目录和annotation HTTPstatus未知边界见24。
-- 新extra1终态与下一步：仅上述workflow step，private LocalApplicationData新GUID、metadata/owner等检查及仅测试进程TEMP/TMP已交付，finally恢复、失败保留、成功时仅owned空根非递归删除；不改ACL/生产安全/可信SID、不写GITHUB_ENV，GOTMPDIR、原两Go command/flags/range/exit/Tee/diagnostic/gate不变。实施STOP，原独验A1–A4静态PASS：git diff/diffcheck、YAML Ruby/Psych、Python结构commands均exit0；pwsh此前已确认缺失，本轮无动态执行，实际Windows双arch/ACL恶例/runtime及正常AppData生产路径仍24。新extra1已使用、局部验证结束，旧两轮及24历史两轮/两次分别批准extra1、28旧两轮/此前extra1全部保留，本次失败不授权后续自动修复。前一 `/private/var/folders/82/9v48ldbs4ng513qh7_wtlx8m0000gn/T/opencode/displaykvm-final-rc4-local/summary.json` 局部PASS不替代native；等待已获准rc5真实Linux/Windows双arch及九包/Release下载，尚无SHA/runURL，不提前记PASS。两codewriter均STOP、无helper；taskdocs读回释放本人锁后FREEZE、无待写、父占用保留，供Git精确提交5产品+4文档共9paths，23/30不归档。
+- 新extra1终态与下一步：仅上述workflow step，private LocalApplicationData新GUID、metadata/owner等检查及仅测试进程TEMP/TMP已交付，finally恢复、失败保留、成功时仅owned空根非递归删除；不改ACL/生产安全/可信SID、不写GITHUB_ENV，GOTMPDIR、原两Go command/flags/range/exit/Tee/diagnostic/gate不变。实施STOP，原独验A1–A4静态PASS：git diff/diffcheck、YAML Ruby/Psych、Python结构commands均exit0；pwsh此前已确认缺失，该局部验证阶段无动态执行，不替代原生证据。新extra1已使用、局部验证结束，旧两轮及24历史两轮/两次分别批准extra1、28旧两轮/此前extra1全部保留，本次失败不授权后续自动修复。前一 `/private/var/folders/82/9v48ldbs4ng513qh7_wtlx8m0000gn/T/opencode/displaykvm-final-rc4-local/summary.json` 局部PASS保留；该批5产品+4文档共9paths已提交推送rc5，真实结果见下条，不提前记整体PASS。两codewriter均STOP、无helper；taskdocs读回释放本人锁后FREEZE、无待写、父占用保留，23/30不归档。
+- rc5真实结果与stdio补充（父转交）：tag `v0.0.1-rc.20261107.5` 对应[run42348600908](https://github.com/orzlees/display-kvm/actions/runs/42348600908)，两Windows测试step exit1，原annotation仅 `Process completed with exit code 1`。用户真实日志定位 `C:\a\_temp\d91b0d81-524a-4641-86a4-ad61761dcd46.ps1:80` throw“测试临时根目录必须由当前令牌账户所有”，确定所给stdio的owner guard在root Go tests前抛错；finally保留本次临时目录与RunnerTemp日志是结果而非根因，另一架构是否同一错误未证实。原SID未提供，随后Oracle只读结论与新诊断授权见下节；不写已修复，不沿用rc4生产ACL测试失败。原24独验已terminal、无monitor/下载程序；完整分组提交、证据目录、Windows架构→job编号映射未完整提供及annotation HTTP未知口径见[24 rc5记录](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。core/desktop-windows/desktop-macos-arm64/release全skipped，无九包/artifact/Release/下载hash/PE/许可证闭环，旧轮次/局部PASS和前一extra1已用事实保留。
+
+## rc5后新诊断extra1（仅workflow既有step，静态结论已交）
+
+- 本轮交付（父转交）：原实施STOP，仅workflow windows-native step:172–404。两个布尔关系“目录所有者是否等于当前用户”“目录所有者是否等于当前进程的默认对象所有者”或unknown，固定类别“当前用户/固定可信组/其它”及phase/reason/type/scriptline受控；inner catch冻结首fail、outer catch bare throw，不输出rawSID/path/Message，不记录账户名或凭据，不改owner比较安全if、Go cmds/exit/TEMP TMP/cleanup/gates，不调整所有权或扩大测试范围。
+- 本轮静态验收（父转交）：原独验A1诊断/A2安全/A3异常退出清理/A4输出上限静态PASS已交，actual diff、限定diffcheck、RubyPsych YAML均exit0；two Go tests原命令各1处及flags/Tee/立即LASTEXITCODE/root fail阻断desktop保留，TEMP/TMP与cleanup、other jobs/gates/release不变。pwsh本机不可用、不安装、不虚假dynamic，native两arch仍24；最终交付计量尚未提供，不为等计量持锁。
+- Oracle确认现比较为两SID.Value，没有类型错、实际不同但原值未知；当前进程默认对象所有者可不等当前用户，不能据此放宽安全。rc5所给日志中Go测试尚未跑，另一架构同一owner错误未证实；定位目的不是修复完成。后续rc6采证虽已另准，尚无rc6实际运行PASS、SHA/tagpush或runURL。
+- 本轮两文件诊断extra1已使用，旧28/29自动两轮、24历史两轮及所有earlierextra1全部保留，不重置、再失败无自动更多。rc5 run42348600908、userstdio、当时Go未运行与actual owner未知保留，本轮静态PASS不等根因已修或candidate可下。两sourcewriter STOP；taskdocs必要读回/相对链接核对后核验并正常释放本人短锁，FREEZE全部四文档、无待写、父占用保留，供exact6paths（2source+4docs）后续提交；不自行Git/测试/构建/API、验source或新建报告/检查点，23/30不归档。
 
 ## 完成、归档与迁移
 
