@@ -5,14 +5,14 @@
 - 项目归属：`/Users/orzlee/work/project/other/displayKvm`，工作名称 displayKvm
 - 总计划：[显示器切换工具开发](../任务计划/【20261105-显示器切换工具开发】.md)
 - 批准设计：[显示器控制与交付缺口补全设计](../superpowers/specs/2026-11-07-display-control-completion-design.md)
-- 对应需求：补全设计 R7；状态：进行中（原软件/诊断PASS与rc3 Windows root exit1保留；本次24/28追加局部PASS，workflow未写、29两轮不变，九包/下载/发布未验）
-- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T13:52:11+08:00（父转交本次局部证据及29额度不变，不是完成时刻）
+- 对应需求：补全设计 R7；状态：进行中（新extra1仅Windows测试step、实施STOP；原独验终态A1–A4静态PASS，等待24真实CI；rc4失败及九包/下载/发布缺口保留）
+- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T14:38:17+08:00（父转交新extra1独验终态，不是完成时刻）
 - 实际完成时间：未完成；权威完成字段为本字段，归档时间另记
 - 当前文件位置：`docs/待办事项/待办事项-20261105-显示器切换工具开发-29-Windows候选与Actions发布-进行中.md`
 - 所属系列主会话 ID：`ses_e4cc8a233ffeDDjHm7v7yPI8S3`；文档执行者：`ses_e4ca67d8affe48ddN4S1MR1ZXf`
-- 专属实施子代理会话：`ses_e4c2221a5ffe465gK11LdyFkpr`，第2轮仅Windows workflow诊断补做完成停写；原独验 `ses_e4bff311bffetgk8CWAyNcrqpC` 本轮最终更正为静态PASS、动态pwsh留24，最新输入估计61K由父转交。首次独验 `ses_e4c0fbbb4ffey6Rn74YMyPvUUB` 失败/输入计量未知不追加；第1轮软件PASS、首败及累计次数均保留
+- 专属实施子代理会话：`ses_e4c2221a5ffe465gK11LdyFkpr`，新extra1仅Windows-native测试step、终态STOP；原独验 `ses_e4bff311bffetgk8CWAyNcrqpC` 终态A1–A4静态PASS，无本轮动态pwsh。原第1轮软件PASS、第2轮诊断静态PASS/纠正及首次独验 `ses_e4c0fbbb4ffey6Rn74YMyPvUUB` 失败、累计次数保留，新静态PASS不替代原生验收
 - 执行批次/并行组：补全第2组/共享脚本串行接管28，先于30
-- 本次选中范围：25、26、27、28、29、30及24软件验证部分；原第1轮PE夹具、第2轮Windows诊断的证据/两轮计数保留。本次五文件extra1仅归24/28，三lane均STOP且局部独验PASS；workflow本轮未写、不增加29额度，不将局部PASS当原生/真实载荷或下载通过
+- 本次选中范围：25、26、27、28、29、30及24软件验证部分；新五文件extra1本任务仅 `.github/workflows/build.yml` 的windows-native测试step，实施及静态独验终态已交付、本次extra1已使用。原两轮及此前各extra1保留不重置，本次失败不授权后续自动修复；不能由静态PASS认定原生/下载通过
 - 授权依据与停止边界：用户2026-11-07已通过 question 明确批准“按设计实施”；本任务已获准修改workflow与脚本，实现artifact上传和Release发布入口；实现入口不等于已执行发布。本轮不实际推送、触发Actions或创建Release，实际外部执行及下载核对在24软件验证阶段按已有授权和届时明确指令执行。各角色仅执行本编号，不扩到其他任务；终点为真实硬件验收准备，不提交、不新增安装器、不操作硬件。
 - 版本背景：主会话转交分支 `feat/display-control-completion`、基点 `f26ecf2`；文档执行者未执行 Git 核验或改变 Git 状态
 - 历史路径迁移状态：2026-11-07随开工从未完成后缀改为进行中后缀，不覆盖目标并同步链接；01–23归档身份和历史证据不改
@@ -98,7 +98,8 @@ Windows GUI+daemon+CLI配套，amd64/arm64支持程度依据实际证据；增�
 - rc2及修复归属（父转交）：tag `v0.0.1-rc.20261107.2`、commit `0563fe07c6652b9bd881541537cfd46f75ce6a0b`、[run 42338704107](https://github.com/orzlees/display-kvm/actions/runs/42338704107)。Windows amd64 job128301407269/arm64 job128301407117 root go test exit1、annotations HTTP200，未用os import及Darwin后端/设置测试的跨平台夹具问题见24；core/全部GUI/release skipped，无包/下载/Release可验。28第2最后补做仅Linux flag/开发依赖/说明，Windows workflow、九包门控及发布条款不变；25第1补做删import、24用户额外授权1轮仅两测试文件，不计29新补做或增加额度。
 - 24额外授权结果：原独验独立执行两包联合hostrace一次exit0，2package+188test pass、0fail/0skip，另Windows双arch每arch两包compile-only共4commands exit0、diffcheck0，两文件实际范围审阅PASS、无缺口，无重跑、生成PE未运行/未打包。历史24两轮不清零，root25包复验只计有因命令复验；本次额外1轮只执行一次、无失败返修，不扩29/28额度，整个24仍未完成。
 - rc3实际结果（父转交）：commit `e3d67c533fe968e0dea4548cb5582ee0481fad0a`、tag `v0.0.1-rc.20261107.3` 已真实推送，对应[run42341866318](https://github.com/orzlees/display-kvm/actions/runs/42341866318)。Windows arm64 job128311118696/amd64 job128311118855原生无屏产品测试root go test exit1，annotations含配置锁路径permission_denied/不可信主体、loginstart `flag provided but not defined: -config`；具体生产/测试归因待查。Linux两arch也失败，prepare成功、core/GUI/release全部skipped，无archive/Release证据；证据为24记录的rc3-ci目录下 `annotations-128311118696.json`、`annotations-128311118855.json`，本角色不读取重验。
-- 当前授权与下一步：用户本次另准五文件extra1已使用，三lane均终态STOP，原28 validator静态scope PASS、原24独验final局部PASS，详见[24当前授权与局部独验](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。真实证据为 `/private/var/folders/82/9v48ldbs4ng513qh7_wtlx8m0000gn/T/opencode/displaykvm-final-rc4-local/summary.json`，已确认fresh独占无覆盖；taskdocs不读报告。29 workflow本轮未写、原两轮不增加，28原两轮+本次extra1及24历史两轮+上次extra1+本次extra1保留，不自动更多。锁诊断不放宽owner/ACE/reparse/link/可信SID/错误码，实际根因仍未知；rc4尚未commit/tag/push，不编造SHA/run。四taskdocs读回释放本人锁后FREEZE、无待写，供其他Git执行者精确提交产品5+文档4共9路径，父占用保留，23/30不归档。
+- rc4真实失败（父转交）：commit `fd41e9eeedb76c154fd867ae989e0790ff530907`、tag `v0.0.1-rc.20261107.4` 对应[run42345018809](https://github.com/orzlees/display-kvm/actions/runs/42345018809)，completed/failure。Windows arm64 job128320803866/amd64 job128320803813 root go test exit1，配置锁permission_denied；runner祖先AuthenticatedUsers危险写被现policy真实拒绝，准确ACE/目录见[24当前记录](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。正常AppData生产路径及最终测试环境方案尚未验，不称纯fixture或已修产品，`-config` Usage为测试故意拒旧参数。Linux两arch亦失败，prepare PASS，core/WinGUI/MacGUI/release skipped，无九包/artifact/Release/下载hash；真实rc4-ci目录和annotation HTTPstatus未知边界见24。
+- 新extra1终态与下一步：仅上述workflow step，private LocalApplicationData新GUID、metadata/owner等检查及仅测试进程TEMP/TMP已交付，finally恢复、失败保留、成功时仅owned空根非递归删除；不改ACL/生产安全/可信SID、不写GITHUB_ENV，GOTMPDIR、原两Go command/flags/range/exit/Tee/diagnostic/gate不变。实施STOP，原独验A1–A4静态PASS：git diff/diffcheck、YAML Ruby/Psych、Python结构commands均exit0；pwsh此前已确认缺失，本轮无动态执行，实际Windows双arch/ACL恶例/runtime及正常AppData生产路径仍24。新extra1已使用、局部验证结束，旧两轮及24历史两轮/两次分别批准extra1、28旧两轮/此前extra1全部保留，本次失败不授权后续自动修复。前一 `/private/var/folders/82/9v48ldbs4ng513qh7_wtlx8m0000gn/T/opencode/displaykvm-final-rc4-local/summary.json` 局部PASS不替代native；等待已获准rc5真实Linux/Windows双arch及九包/Release下载，尚无SHA/runURL，不提前记PASS。两codewriter均STOP、无helper；taskdocs读回释放本人锁后FREEZE、无待写、父占用保留，供Git精确提交5产品+4文档共9paths，23/30不归档。
 
 ## 完成、归档与迁移
 

@@ -16,7 +16,7 @@
 | rockowitz/ddcutil固定提交tar.gz | `c5c271131ba40e009f0a71a04e8856f4ca4647e9e22d38e23344fdc7714fcc28` |
 | systemd/systemd固定提交tar.gz | `9421b006c0e4c816fe06c004204091b09fd628891403dcdf6511ceb8ce384f13` |
 
-载荷保留完整上游归档、实际传递依赖的Debian原始二进制包及完整对应源码（`.dsc`、原始归档、发行版补丁），记录每份归档的官方来源URL和SHA-256。运行库版本必须与原生机已安装版本一致，不能用另一个版本的源码替代。
+载荷保留完整上游归档、实际传递依赖的Debian原始二进制包及完整对应源码（`.dsc`、原始归档、发行版补丁），记录每份归档的官方来源URL和SHA-256。Debian运行库版本必须与原生机已安装版本一致，不能用另一个版本的源码替代。同次固定systemd源码构建的私有共享库复用已登记的systemd归档和完整许可，不伪造Debian原包来源。
 
 ## 原生环境与依赖
 
@@ -43,7 +43,7 @@ make -j2
 
 构建 ddcutil 3.0.2 还需要 libudev-dev；生成时由现有闭包生成器收集并校验运行库及其 Debian 对应源码、版权声明。
 
-systemd v258使用Meson、Ninja、C编译器、Python/Jinja2、gperf、pkg-config、libcap及libmount等构建依赖。采用上游 `-Dstandalone-binaries=true`，编译实际名为 `busctl` 和 `udevadm` 的目标，从构建目录读取同名产物，随包客户端名称也保持为 `busctl` 和 `udevadm`。该选项只筛选现有目标，不产生 `.standalone` 后缀。standalone静态纳入systemd私有代码，但不代表完全静态可移植；glibc及其它外部库仍需检查。具体可选依赖须按最终Meson配置和实际产物核验，不能在本机未构建时宣称闭包完整。
+systemd v258使用Meson、Ninja、C编译器、Python/Jinja2、gperf、pkg-config、libcap及libmount等构建依赖。采用上游 `-Dstandalone-binaries=true`，编译实际名为 `busctl` 和 `udevadm` 的目标，从构建目录读取同名产物，随包客户端名称也保持为 `busctl` 和 `udevadm`。该选项只筛选现有目标，不产生 `.standalone` 后缀，也不保证消除systemd私有动态库或完全静态可移植；glibc及其它外部库仍需检查。具体可选依赖须按最终Meson配置和实际产物核验，不能在本机未构建时宣称闭包完整。
 
 完整Meson参数保存在来源锁定文件：禁止自动下载子项目，禁用可选自动功能、测试、文档、bootloader和BPF框架，只编译 `busctl` 和 `udevadm` 两个目标。构建进程使用固定PATH/区域设置、SOURCE_DATE_EPOCH及源码路径映射，不继承个人编译参数、LD_LIBRARY_PATH或包查找路径。配方会记录实际工具及已安装包版本，但尚无两次真实构建的字节一致性证据。
 
@@ -87,7 +87,9 @@ sh packaging/package.sh core --run-id core-001
 
 在受信任的本地构建产物上用readelf核架构、动态依赖和RUNPATH，ldd核依赖闭包；除约定的系统加载器/glibc外，依赖均须从包内解析。glibc符号需求不得高于最终声明基线。任何缺依赖、错误架构、构建机绝对路径、缺源码或缺许可均不能产出可分发包。每份工具与随包库均记录实际SHA-256、版本、来源、完整对应源码和构建脚本。
 
-运行基线只豁免 `libc.so.6 libm.so.6 libdl.so.2 libpthread.so.0 librt.so.1 libresolv.so.2 libutil.so.1`，以及架构约定的系统加载器；其他传递依赖均复制为无链接的 `lib/<SONAME>`。工具RUNPATH必须为 `$ORIGIN/lib`，每个库为 `$ORIGIN`；不接受旧RPATH、绝对依赖、额外系统回退路径或高于GLIBC_2.36的符号。库经patchelf修改前后的摘要都记录，原字节须存在于所下载精确.deb内。glibc和加载器由宿主提供，不随包混装。
+运行基线只豁免 `libc.so.6 libm.so.6 libdl.so.2 libpthread.so.0 librt.so.1 libresolv.so.2 libutil.so.1`，以及架构约定的系统加载器；其他传递依赖均复制为无链接的 `lib/<SONAME>`，实际ELF的唯一SONAME必须与文件名及依赖映射一致。工具RUNPATH必须为 `$ORIGIN/lib`，每个库为 `$ORIGIN`；不接受旧RPATH、绝对依赖、额外系统回退路径或高于GLIBC_2.36的符号。库经patchelf修改前后的摘要都记录；Debian库原字节须存在于所下载精确.deb内。glibc和加载器由宿主提供，不随包混装。
+
+同次构建的systemd私库仅接受 `work/systemd-build` 内目标架构的普通ELF共享库，链接入口和解析后的真实文件都须位于该目录；其他构建树、链接逃逸、同名不同来源或SONAME不匹配均拒绝。清单结构版本仍为1，库记录仅新增可选 `build_path`：它是该构建目录内真实文件的受限相对路径，不含宿主绝对路径。此类库的 `source` 为已核固定归档及完整许可的 `systemd`，`version` 为258，并记录 `architecture`、`original_sha256` 和打包后的 `sha256`；`package`、`package_archive` 必须为空。Debian库继续要求完整原包及对应源码和许可信息，且不得填写 `build_path`。生成器对工具和每个随包库复核传递依赖，非基线依赖均须从随包lib解析；当前尚无两个架构的成功实物证明。
 
 包装校验在macOS也能静态读取两个架构ELF，无需执行它们；原生生成器才对本次可信编译结果执行ldd，并在设置RUNPATH后确认全部非基线解析路径位于随包lib。静态DT_NEEDED检查不能证明所有运行时dlopen路径或硬件路径通过，两Linux环境运行和完整项目验收仍由任务24执行。
 

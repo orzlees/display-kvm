@@ -210,22 +210,101 @@ jobs:
             $escaped = $summary.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
             Write-Host "::error title=Windows $Phase go test::$escaped"
           }
-          # 非零退出由下面显式处理，避免原生命令错误偏好提前打断输出捕获；
-          # Tee只复制stdout/stderr，不改变测试参数，退出码须立即保存，失败不继续desktop。
-          $PSNativeCommandUseErrorActionPreference = $false
-          go test ./cmd/... ./internal/... -count=1 2>&1 | Tee-Object -FilePath $rootTestLog
-          $rootTestExitCode = $LASTEXITCODE
-          if ($rootTestExitCode -ne 0) {
-            try { Write-TestFailureAnnotation 'root' $rootTestLog $rootTestExitCode }
-            catch { Write-Host '::error::无法生成root测试摘要；完整输出见当前步骤日志。' }
-            finally { exit $rootTestExitCode }
-          }
-          go -C desktop test ./... -count=1 2>&1 | Tee-Object -FilePath $desktopTestLog
-          $desktopTestExitCode = $LASTEXITCODE
-          if ($desktopTestExitCode -ne 0) {
-            try { Write-TestFailureAnnotation 'desktop' $desktopTestLog $desktopTestExitCode }
-            catch { Write-Host '::error::无法生成desktop测试摘要；完整输出见当前步骤日志。' }
-            finally { exit $desktopTestExitCode }
+          $hadTemp = Test-Path Env:TEMP
+          $hadTmp = Test-Path Env:TMP
+          $originalTemp = [Environment]::GetEnvironmentVariable('TEMP', 'Process')
+          $originalTmp = [Environment]::GetEnvironmentVariable('TMP', 'Process')
+          $testTempCreated = $false
+          $testsSucceeded = $false
+          try {
+            # GOTMPDIR只管理编译临时文件；runner默认TEMP的祖先可能具有危险写入权限。
+            # 仅为本步骤的测试及子进程选择当前账户LocalAppData，不修改账户配置或任何ACL。
+            # 这里只检查目录身份，完整祖先安全策略仍由原生settingslock测试的生产入口执行。
+            $localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+            if (-not [IO.Path]::IsPathFullyQualified($localAppData)) { throw 'LocalAppData必须是既存绝对目录' }
+            $localAppData = [IO.Path]::GetFullPath($localAppData)
+            $localDriveRoot = [IO.Path]::GetPathRoot($localAppData)
+            if ($localDriveRoot -notmatch '^[A-Za-z]:\\$' -or ([IO.DriveInfo]::new($localDriveRoot)).DriveType -ne [IO.DriveType]::Fixed) {
+              throw 'LocalAppData必须位于固定本地盘'
+            }
+            $localDirectory = Get-Item -LiteralPath $localAppData -Force
+            if (-not $localDirectory.PSIsContainer -or ($localDirectory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw 'LocalAppData必须是普通非重解析目录'
+            }
+            $localAppData = $localDirectory.FullName
+            $currentUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+            $testTempLeaf = 'displaykvm-native-tests-' + [Guid]::NewGuid().ToString('N')
+            $testTempRoot = Join-Path $localAppData $testTempLeaf
+            if (Test-Path -LiteralPath $testTempRoot) { throw '测试临时目录名称已存在，拒绝复用' }
+            # 不使用-Force；只有独占创建成功后才记录归属，不能接管既有对象。
+            New-Item -Path $localAppData -Name $testTempLeaf -ItemType Directory | Out-Null
+            $testTempCreated = $true
+            $testTempDirectory = Get-Item -LiteralPath $testTempRoot -Force
+            if (-not $testTempDirectory.PSIsContainer -or
+                ($testTempDirectory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+                -not [string]::Equals($testTempDirectory.FullName, $testTempRoot, [StringComparison]::OrdinalIgnoreCase) -or
+                -not [string]::Equals($testTempDirectory.Parent.FullName, $localAppData, [StringComparison]::OrdinalIgnoreCase)) {
+              throw '测试临时根目录类型或路径不符'
+            }
+            if ((Get-Acl -LiteralPath $testTempRoot).GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $currentUserSid.Value) {
+              throw '测试临时根目录必须由当前令牌账户所有'
+            }
+            $env:TEMP = $testTempRoot
+            $env:TMP = $testTempRoot
+            # 非零退出由下面显式处理，避免原生命令错误偏好提前打断输出捕获；
+            # Tee只复制stdout/stderr，不改变测试参数，退出码须立即保存，失败不继续desktop。
+            $PSNativeCommandUseErrorActionPreference = $false
+            go test ./cmd/... ./internal/... -count=1 2>&1 | Tee-Object -FilePath $rootTestLog
+            $rootTestExitCode = $LASTEXITCODE
+            if ($rootTestExitCode -ne 0) {
+              try { Write-TestFailureAnnotation 'root' $rootTestLog $rootTestExitCode }
+              catch { Write-Host '::error::无法生成root测试摘要；完整输出见当前步骤日志。' }
+              finally { exit $rootTestExitCode }
+            }
+            go -C desktop test ./... -count=1 2>&1 | Tee-Object -FilePath $desktopTestLog
+            $desktopTestExitCode = $LASTEXITCODE
+            if ($desktopTestExitCode -ne 0) {
+              try { Write-TestFailureAnnotation 'desktop' $desktopTestLog $desktopTestExitCode }
+              catch { Write-Host '::error::无法生成desktop测试摘要；完整输出见当前步骤日志。' }
+              finally { exit $desktopTestExitCode }
+            }
+            $testsSucceeded = $true
+          } finally {
+            # 还原本进程原值，也区分原本未定义；恢复或清理错误不能覆盖测试的原始失败退出码。
+            $restoreFailed = $false
+            try {
+              if ($hadTemp) { $env:TEMP = $originalTemp }
+              else { [Environment]::SetEnvironmentVariable('TEMP', $null, 'Process') }
+            } catch {
+              $restoreFailed = $true
+              Write-Host '::warning::无法恢复本步骤TEMP进程变量。'
+            }
+            try {
+              if ($hadTmp) { $env:TMP = $originalTmp }
+              else { [Environment]::SetEnvironmentVariable('TMP', $null, 'Process') }
+            } catch {
+              $restoreFailed = $true
+              Write-Host '::warning::无法恢复本步骤TMP进程变量。'
+            }
+            if ($testsSucceeded -and $testTempCreated -and -not $restoreFailed) {
+              try {
+                $testTempDirectory = Get-Item -LiteralPath $testTempRoot -Force
+                if (-not $testTempDirectory.PSIsContainer -or
+                    ($testTempDirectory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+                    -not [string]::Equals($testTempDirectory.FullName, $testTempRoot, [StringComparison]::OrdinalIgnoreCase) -or
+                    -not [string]::Equals($testTempDirectory.Parent.FullName, $localAppData, [StringComparison]::OrdinalIgnoreCase) -or
+                    (Get-Acl -LiteralPath $testTempRoot).GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $currentUserSid.Value) {
+                  throw '本次临时根目录身份已改变，保留目录'
+                }
+                # 仅删除本次拥有的空根目录，不递归、不跟随链接，也不清理LocalAppData父目录。
+                [IO.Directory]::Delete($testTempRoot, $false)
+              } catch {
+                Write-Host '本次测试临时目录非空或无法安全确认，已保留；未递归清理。'
+              }
+            } elseif ($testTempCreated) {
+              Write-Host '测试未全部成功或临时变量未恢复，保留本次临时目录与RunnerTemp测试日志。'
+            }
+            if ($restoreFailed -and $testsSucceeded) { throw '无法恢复本步骤TEMP/TMP进程变量' }
           }
 
   core:

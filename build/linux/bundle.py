@@ -268,7 +268,7 @@ class DebianCollector:
                 owners = result.stdout.decode().strip().splitlines()
                 break
         if not owners or len(owners) != 1:
-            fail("运行库无法唯一对应已安装Debian软件包")
+            fail("运行库无法唯一对应已安装Debian软件包：" + re.sub(r"[^A-Za-z0-9_+@.-]", "_", library.name)[:160])
         owner = owners[0].split(": ", 1)[0]
         fields = self.run("dpkg-query", "-W", "-f=${binary:Package}\t${Version}\t${Architecture}\t${source:Package}\t${source:Version}", owner).split("\t")
         if len(fields) != 5 or fields[2] != self.arch:
@@ -334,7 +334,7 @@ class DebianCollector:
                 "original_sha256": original_hash}
 
 
-def resolved_dependencies(binary, work, log, arch):
+def resolved_dependencies(binary, work, log, arch, systemd_build=None):
     output = command(["ldd", binary], work, log)
     dependencies = {}
     for line in output.splitlines():
@@ -346,28 +346,72 @@ def resolved_dependencies(binary, work, log, arch):
             name, location = name.strip(), location.strip().split()[0]
             if name in {LOADERS[arch], Path(LOADERS[arch]).name} and Path(location).resolve() == Path(LOADERS[arch]).resolve():
                 continue
-            if not location.startswith("/") or "/" in name:
+            if (not location.startswith("/") or not re.fullmatch(r"[A-Za-z0-9_+@.-]+", name)
+                    or name in {".", ".."}):
                 fail("ELF依赖解析不是受控绝对位置")
-            dependencies[name] = Path(location).resolve(strict=True)
+            candidate = Path(location)
+            actual = candidate.resolve(strict=True)
+            # ldd会解析构建树内的SONAME链接；链接入口和真实文件都必须留在本次systemd构建目录。
+            # 不接受其他work子树，也不允许链接把构建私库变成runner上的未知文件。
+            if candidate.is_relative_to(work) or actual.is_relative_to(work):
+                if (systemd_build is None or not candidate.is_relative_to(systemd_build)
+                        or not actual.is_relative_to(systemd_build)):
+                    fail("运行库越出受控systemd构建目录：" + name[:160])
+            if name in dependencies and dependencies[name] != actual:
+                fail("同一SONAME解析到不同运行库：" + name[:160])
+            dependencies[name] = actual
         elif line.startswith("/"):
             location = line.split()[0]
             if Path(location).resolve() != Path(LOADERS[arch]).resolve():
                 fail("ELF使用未知加载器")
         elif not line.startswith("linux-vdso.so."):
             fail("ldd返回无法识别的依赖行")
+    # ldd包含传递依赖，但仍需核对当前对象的DT_NEEDED，不能把遗漏或异常别名当成完整闭包。
+    dynamic = command(["readelf", "-dW", binary], work, log)
+    for name in re.findall(r"\(NEEDED\).*?\[(.*?)\]", dynamic):
+        if not re.fullmatch(r"[A-Za-z0-9_+@.-]+", name) or name in {".", ".."}:
+            fail("ELF依赖含目录或不安全名称")
+        if name not in BASELINE and name not in dependencies:
+            fail("ldd未覆盖ELF直接依赖：" + name[:160])
     return dependencies
+
+
+def systemd_library(name, library, systemd_build, version, arch, work, log):
+    root = systemd_build.resolve(strict=True)
+    actual = regular(library.resolve(strict=True))
+    if root != systemd_build or not actual.is_relative_to(root):
+        fail("构建库真实位置不在固定systemd构建目录：" + name[:160])
+    relative = actual.relative_to(root).as_posix()
+    if not re.fullmatch(r"[A-Za-z0-9_+./@-]+", relative):
+        fail("systemd构建库的相对路径含不安全字符：" + name[:160])
+    with actual.open("rb") as stream:
+        header = stream.read(20)
+    if (header[:6] != b"\x7fELF\x02\x01" or int.from_bytes(header[16:18], "little") != 3
+            or int.from_bytes(header[18:20], "little") != {"amd64": 62, "arm64": 183}[arch]):
+        fail("systemd构建库不是目标架构的ELF共享库：" + name[:160])
+    dynamic = command(["readelf", "-dW", actual], work, log)
+    sonames = re.findall(r"\(SONAME\).*?\[(.*?)\]", dynamic)
+    if sonames != [name]:
+        fail("systemd构建库SONAME与依赖映射不符：" + name[:160])
+    # 固定上游归档和完整许可已随systemd工具收集；私库复用该来源，而非伪造Debian包信息。
+    # 记录真实相对构建路径及修改前摘要，便于追溯同次构建，不能把绝对work路径带入载荷。
+    return {"package": "", "version": version, "architecture": arch, "source": "systemd",
+            "package_archive": "", "build_path": relative, "original_sha256": sha(actual)}
 
 
 def check_elf(binary, arch, program, work, log):
     with binary.open("rb") as stream:
         header = stream.read(20)
     machine = {"amd64": 62, "arm64": 183}[arch]
-    if header[:6] != b"\x7fELF\x02\x01" or int.from_bytes(header[18:20], "little") != machine:
+    if (header[:6] != b"\x7fELF\x02\x01" or int.from_bytes(header[18:20], "little") != machine
+            or not program and int.from_bytes(header[16:18], "little") != 3):
         fail("ELF架构不符")
     dynamic = command(["readelf", "-dW", binary], work, log)
     paths = re.findall(r"\((RUNPATH|RPATH)\).*?\[(.*?)\]", dynamic)
     if paths != [("RUNPATH", "$ORIGIN/lib" if program else "$ORIGIN")]:
         fail("ELF必须只保留相对RUNPATH")
+    if not program and re.findall(r"\(SONAME\).*?\[(.*?)\]", dynamic) != [binary.name]:
+        fail("共享库SONAME必须与随包文件名唯一匹配")
     for needed in re.findall(r"\(NEEDED\).*?\[(.*?)\]", dynamic):
         if "/" in needed:
             fail("ELF依赖含构建机目录")
@@ -457,17 +501,18 @@ def generate(args):
                 "udevadm": systemd_build / "udevadm"}
     libraries = {}
     for binary in binaries.values():
-        for name, location in resolved_dependencies(regular(binary), work, log, args.arch).items():
+        for name, location in resolved_dependencies(regular(binary), work, log, args.arch, systemd_build).items():
             if name not in BASELINE:
                 if name in libraries and libraries[name] != location:
-                    fail("不同工具解析到同名但不同来源的运行库")
-                if location.is_relative_to(work):
-                    fail("工具依赖未独立封装的构建树共享库")
+                    fail("不同工具解析到同名但不同来源的运行库：" + name[:160])
                 libraries[name] = location
     collector = DebianCollector(work, payload, args.arch, log)
     library_records = []
     for name, source in sorted(libraries.items()):
-        metadata = collector.package(source)
+        if source.is_relative_to(systemd_build):
+            metadata = systemd_library(name, source, systemd_build, pins["systemd"]["version"], args.arch, work, log)
+        else:
+            metadata = collector.package(source)
         dest = payload / "lib" / name
         write(dest, regular(source).read_bytes(), 0o755)
         command(["patchelf", "--set-rpath", "$ORIGIN", dest], work, log)
@@ -483,12 +528,14 @@ def generate(args):
         expected = "3.0.2" if name == "ddcutil" else "258"
         if not re.search(r"(?<![0-9.])" + re.escape(expected) + r"(?![0-9.])", version):
             fail("工具实际版本与固定源码版本不符")
-        # 以打包后的RUNPATH再次解析全部传递依赖，非glibc依赖必须落在随包lib中。
-        for soname, location in resolved_dependencies(dest, work, log, args.arch).items():
-            if soname not in BASELINE and location != payload / "lib" / soname:
-                fail("运行库闭包仍依赖runner系统目录")
         tool_records.append(dict(record(dest, payload), name=name, version=expected,
-                                 source="ddcutil" if name == "ddcutil" else "systemd"))
+                                  source="ddcutil" if name == "ddcutil" else "systemd"))
+    # 以打包后的RUNPATH再次解析全部传递依赖，非glibc依赖必须落在随包lib中。
+    # 私库也单独检查，避免工具可启动却仍有传递依赖回退到构建树或runner系统目录。
+    for binary in [payload / name for name in binaries] + [payload / "lib" / name for name in sorted(libraries)]:
+        for soname, location in resolved_dependencies(binary, work, log, args.arch).items():
+            if soname not in BASELINE and location != payload / "lib" / soname:
+                fail("运行库闭包仍依赖runner系统目录：" + soname[:160])
     common = Path("/usr/share/common-licenses")
     common_licenses = []
     for source in sorted(common.iterdir()):

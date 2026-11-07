@@ -56,6 +56,7 @@ type linuxLibrary struct {
 	Architecture   string `json:"architecture"`
 	Source         string `json:"source"`
 	PackageArchive string `json:"package_archive"`
+	BuildPath      string `json:"build_path,omitempty"`
 }
 
 type linuxPayloadManifest struct {
@@ -152,6 +153,12 @@ func inspectLinuxELF(name, arch string, program bool) ([]string, error) {
 	oldRpath, oldErr := image.DynString(elf.DT_RPATH)
 	if err != nil || oldErr != nil || len(oldRpath) != 0 || len(runpath) != 1 || runpath[0] != want {
 		return nil, errors.New("Linux载荷必须只使用受控相对RUNPATH")
+	}
+	if !program {
+		sonames, err := image.DynString(elf.DT_SONAME)
+		if err != nil || len(sonames) != 1 || sonames[0] != filepath.Base(name) {
+			return nil, errors.New("Linux共享库SONAME必须与随包文件名唯一匹配")
+		}
 	}
 	interp := ""
 	for _, segment := range image.Progs {
@@ -309,6 +316,34 @@ func linuxDebianSource(directory string, source linuxSource) error {
 	return nil
 }
 
+var linuxBuildLibraryPath = regexp.MustCompile(`^[A-Za-z0-9_+./@-]+$`)
+
+// 来源归档、许可文件及固定上游摘要已由linuxBundle统一核验；此处区分两种库的追溯关系。
+// systemd私库来自同一次固定源码构建，没有Debian原包，不能伪造PackageArchive来绕过来源约束；
+// build_path只记录原构建树内的相对位置，包装时不访问构建机目录，载荷仍必须通过ELF和完整闭包检查。
+func linuxLibrarySource(library linuxLibrary, source linuxSource) error {
+	if source.ID == "" || source.ID != library.Source || source.Name == "" || source.Version == "" ||
+		len(source.Archives) == 0 || len(source.Licenses) == 0 || !linuxHash(library.OriginalSHA256) || library.Version == "" {
+		return errors.New("Linux共享库缺少原始摘要、对应源码或许可来源")
+	}
+	if source.ID == "systemd" {
+		if source.Name != "systemd" || source.Version != linuxSourcePins["systemd"].version || library.Version != source.Version ||
+			len(source.BinaryArchives) != 0 || library.Package != "" || library.PackageArchive != "" ||
+			!linuxPath(library.BuildPath) || !linuxBuildLibraryPath.MatchString(library.BuildPath) {
+			return errors.New("systemd构建库必须来自固定源码和受限相对构建路径，不能伪造Debian原包")
+		}
+		return nil
+	}
+	packageSeen := false
+	for _, archive := range source.BinaryArchives {
+		packageSeen = packageSeen || archive.File == library.PackageArchive
+	}
+	if !strings.HasPrefix(source.ID, "debian-") || library.BuildPath != "" || library.Package == "" || library.PackageArchive == "" || !packageSeen {
+		return errors.New("Debian共享库必须匹配精确原包，不能借构建路径替代来源")
+	}
+	return nil
+}
+
 func linuxBundle(directory, arch string) (*linuxPayloadManifest, error) {
 	manifestPath := filepath.Join(directory, "bundled-tools.json")
 	if _, err := regular(manifestPath); err != nil {
@@ -392,12 +427,11 @@ func linuxBundle(directory, arch string) (*linuxPayloadManifest, error) {
 	for _, library := range manifest.Libraries {
 		name := path.Base(library.File)
 		source := sources[library.Source]
-		packageSeen := false
-		for _, archive := range source.BinaryArchives {
-			packageSeen = packageSeen || archive.File == library.PackageArchive
-		}
-		if library.File != "lib/"+name || linuxSystemLibraries[name] || libraries[name] || files[library.File] != library.SHA256 || !linuxHash(library.SHA256) || !linuxHash(library.OriginalSHA256) || library.Architecture != arch || library.Package == "" || library.Version == "" || !packageSeen || source.ID == "" {
+		if library.File != "lib/"+name || linuxSystemLibraries[name] || libraries[name] || files[library.File] != library.SHA256 || !linuxHash(library.SHA256) || library.Architecture != arch {
 			return nil, errors.New("Linux共享库缺少架构、对应源码、原包或许可来源")
+		}
+		if err := linuxLibrarySource(library, source); err != nil {
+			return nil, fmt.Errorf("Linux共享库%s来源无效：%w", name, err)
 		}
 		libraries[name] = true
 		objects[name], err = inspectLinuxELF(filepath.Join(directory, filepath.FromSlash(library.File)), arch, false)

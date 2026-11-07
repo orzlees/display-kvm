@@ -13,7 +13,7 @@ import (
 
 // 构造最小ELF用于检查包装边界，不执行它，也不把测试字节当作真实Linux载荷。
 // 三个动态节分别保存依赖字符串、动态表和空符号表，覆盖实际ELF读取路径。
-func linuxTestELF(machine elf.Machine, needed []string, runpath, interpreter string) []byte {
+func linuxTestELF(machine elf.Machine, needed []string, runpath, interpreter string, sonames ...string) []byte {
 	strtab := []byte{0}
 	var dynamic bytes.Buffer
 	for _, name := range append(append([]string{}, needed...), runpath) {
@@ -24,6 +24,11 @@ func linuxTestELF(machine elf.Machine, needed []string, runpath, interpreter str
 			needed = needed[1:]
 		}
 		binary.Write(&dynamic, binary.LittleEndian, tag)
+		binary.Write(&dynamic, binary.LittleEndian, uint64(len(strtab)))
+		strtab = append(strtab, append([]byte(name), 0)...)
+	}
+	for _, name := range sonames {
+		binary.Write(&dynamic, binary.LittleEndian, uint64(elf.DT_SONAME))
 		binary.Write(&dynamic, binary.LittleEndian, uint64(len(strtab)))
 		strtab = append(strtab, append([]byte(name), 0)...)
 	}
@@ -196,6 +201,113 @@ func TestLinuxCoreRequiresNativePayload(t *testing.T) {
 		t.Fatal("包装前必须重新检查真实原生载荷")
 	}
 	if err := stageLinux(dir, "", []binaryRecord{{GOOS: "darwin", GOARCH: "arm64"}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLinuxLibrarySourceBuildProvenance(t *testing.T) {
+	// 这里只检查已登记来源与库元数据的关系；真实归档字节、许可摘要仍由linuxBundle统一核验。
+	pin := linuxSourcePins["systemd"]
+	source := linuxSource{ID: "systemd", Name: "systemd", Version: pin.version,
+		Archives: []linuxArchive{{File: "sources/systemd-258.tar.gz", SHA256: pin.sha256}},
+		Licenses: []licenseFile{{File: "licenses/systemd/LICENSE.LGPL2.1", SHA256: strings.Repeat("a", 64)}}}
+	library := linuxLibrary{File: "lib/libprivate-test.so.258", SHA256: strings.Repeat("b", 64),
+		OriginalSHA256: strings.Repeat("c", 64), Architecture: "amd64", Source: "systemd",
+		Version: pin.version, BuildPath: "src/shared/libprivate-test.so.258"}
+	if err := linuxLibrarySource(library, source); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*linuxLibrary, *linuxSource)
+	}{
+		{"absolute-build-path", func(l *linuxLibrary, _ *linuxSource) { l.BuildPath = "/work/libprivate.so" }},
+		{"parent-build-path", func(l *linuxLibrary, _ *linuxSource) { l.BuildPath = "../libprivate.so" }},
+		{"nested-parent-build-path", func(l *linuxLibrary, _ *linuxSource) { l.BuildPath = "src/../../libprivate.so" }},
+		{"windows-build-path", func(l *linuxLibrary, _ *linuxSource) { l.BuildPath = `C:\work\libprivate.so` }},
+		{"control-build-path", func(l *linuxLibrary, _ *linuxSource) { l.BuildPath = "src/lib\x1bprivate.so" }},
+		{"missing-build-path", func(l *linuxLibrary, _ *linuxSource) { l.BuildPath = "" }},
+		{"missing-original-hash", func(l *linuxLibrary, _ *linuxSource) { l.OriginalSHA256 = "" }},
+		{"unknown-source", func(l *linuxLibrary, _ *linuxSource) { l.Source = "unregistered" }},
+		{"unknown-source-kind", func(l *linuxLibrary, s *linuxSource) { l.Source, s.ID = "unregistered", "unregistered" }},
+		{"missing-source", func(_ *linuxLibrary, s *linuxSource) { *s = linuxSource{} }},
+		{"missing-source-archive", func(_ *linuxLibrary, s *linuxSource) { s.Archives = nil }},
+		{"missing-source-license", func(_ *linuxLibrary, s *linuxSource) { s.Licenses = nil }},
+		{"wrong-build-version", func(l *linuxLibrary, _ *linuxSource) { l.Version = "257" }},
+		{"wrong-source-version", func(_ *linuxLibrary, s *linuxSource) { s.Version = "257" }},
+		{"forged-debian-package", func(l *linuxLibrary, _ *linuxSource) { l.Package = "libprivate" }},
+		{"forged-debian-archive", func(l *linuxLibrary, _ *linuxSource) { l.PackageArchive = "sources/libprivate.deb" }},
+		{"forged-source-binary-archive", func(_ *linuxLibrary, s *linuxSource) {
+			s.BinaryArchives = []linuxArchive{{File: "sources/libprivate.deb"}}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			l, s := library, source
+			tc.change(&l, &s)
+			if err := linuxLibrarySource(l, s); err == nil {
+				t.Fatal("构建库必须有固定来源、完整许可和受限相对构建路径，不能伪造Debian原包")
+			}
+		})
+	}
+
+	debian := linuxSource{ID: "debian-example", Name: "example", Version: "1-2",
+		Archives:       []linuxArchive{{File: "sources/example.dsc"}},
+		BinaryArchives: []linuxArchive{{File: "sources/binaries/example.deb"}},
+		Licenses:       []licenseFile{{File: "licenses/example-copyright"}}}
+	library.Source, library.Version, library.BuildPath = debian.ID, "1-2+b1", ""
+	library.Package, library.PackageArchive = "libexample1", debian.BinaryArchives[0].File
+	if err := linuxLibrarySource(library, debian); err != nil {
+		t.Fatal(err)
+	}
+	library.BuildPath = "src/libexample.so"
+	if err := linuxLibrarySource(library, debian); err == nil {
+		t.Fatal("Debian库不能借构建路径规避原包追溯")
+	}
+	library.BuildPath, library.PackageArchive = "", "sources/unregistered.deb"
+	if err := linuxLibrarySource(library, debian); err == nil {
+		t.Fatal("Debian库仍须匹配登记的精确原包")
+	}
+	library.PackageArchive, library.Package = debian.BinaryArchives[0].File, ""
+	if err := linuxLibrarySource(library, debian); err == nil {
+		t.Fatal("Debian库不能省略对应二进制包名")
+	}
+}
+
+func TestLinuxLibrarySONAMEMatchesPayloadName(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		sonames []string
+		valid   bool
+	}{
+		{"matching", []string{"libprivate-test.so.258"}, true},
+		{"missing", nil, false},
+		{"mismatched", []string{"libother.so.258"}, false},
+		{"duplicate", []string{"libprivate-test.so.258", "libother.so.258"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			file := filepath.Join(noticeTempDir(t), "libprivate-test.so.258")
+			data := linuxTestELF(elf.EM_X86_64, []string{"libc.so.6"}, "$ORIGIN", "", tc.sonames...)
+			if err := os.WriteFile(file, data, 0755); err != nil {
+				t.Fatal(err)
+			}
+			_, err := inspectLinuxELF(file, "amd64", false)
+			if (err == nil) != tc.valid {
+				t.Fatalf("共享库SONAME与随包文件名校验不符：%v", err)
+			}
+		})
+	}
+}
+
+func TestLinuxPrivateLibraryTransitiveClosure(t *testing.T) {
+	objects := map[string][]string{"busctl": {"libprivate-test.so.258"},
+		"libprivate-test.so.258": {"libtransitive-test.so.1", "libc.so.6"}}
+	libraries := map[string]bool{"libprivate-test.so.258": true}
+	if err := linuxClosure(objects, libraries); err == nil {
+		t.Fatal("随包构建私库不能遗漏它的传递依赖")
+	}
+	objects["libtransitive-test.so.1"] = []string{"libc.so.6"}
+	libraries["libtransitive-test.so.1"] = true
+	if err := linuxClosure(objects, libraries); err != nil {
 		t.Fatal(err)
 	}
 }
