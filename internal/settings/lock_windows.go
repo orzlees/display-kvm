@@ -242,7 +242,7 @@ func checkWindowsSettingsACL(file *os.File, sid string, private, currentOwner bo
 		return err
 	}
 	if currentOwner && ownerSID != sid || !windowsSettingsTrustedSID(ownerSID, sid) {
-		return model.NewError(model.CodePermissionDenied, "配置锁路径所有者不安全", nil)
+		return fmt.Errorf("%w\nowner=%s\ncurrentSID=%s", model.NewError(model.CodePermissionDenied, "配置锁路径所有者不安全", nil), ownerSID, sid)
 	}
 	// ACL头固定8字节，ACE由系统GetAce返回并受AclSize约束；不接受无法解释的
 	// 对象/回调ACE，避免漏掉非普通主体的授权。拒绝ACE只会收紧访问，可保留。
@@ -283,7 +283,8 @@ func checkWindowsSettingsACL(file *os.File, sid string, private, currentOwner bo
 			continue
 		}
 		if ace.Type != 0 || ace.Size < 16 { // ACCESS_ALLOWED_ACE，SID至少8字节
-			return model.NewError(model.CodePermissionDenied, "配置锁DACL包含不支持的授权类型", nil)
+			// 此处仅已核验ACE头边界；未知授权类型不能按普通ACE布局读取主体SID。
+			return fmt.Errorf("%w\nACE type=%d flags=0x%02x mask=0x%08x", model.NewError(model.CodePermissionDenied, "配置锁DACL包含不支持的授权类型", nil), ace.Type, ace.Flags, ace.Mask)
 		}
 		principal := (*syscall.SID)(unsafe.Add(entry, 8))
 		sidHeader := (*[8]byte)(unsafe.Pointer(principal))
@@ -308,7 +309,7 @@ func checkWindowsSettingsACL(file *os.File, sid string, private, currentOwner bo
 		// 因而可保留；新选中的子目录仍须逐个核验所有者和ACL，不能信任继承。
 		const unsafeAncestor = uint32(0x10000000 | 0x40000000 | 0x000d0000 | 0x2 | 0x10 | 0x40 | 0x100)
 		if private && ace.Mask != 0 || !private && ace.Mask&unsafeAncestor != 0 {
-			return model.NewError(model.CodePermissionDenied, "配置锁路径允许非可信主体访问或改写", nil)
+			return fmt.Errorf("%w\nACE type=%d flags=0x%02x mask=0x%08x\nprincipalSID=%s", model.NewError(model.CodePermissionDenied, "配置锁路径允许非可信主体访问或改写", nil), ace.Type, ace.Flags, ace.Mask, principalSID)
 		}
 	}
 	runtime.KeepAlive(file)
@@ -363,7 +364,9 @@ func pinWindowsSettingsDirectories(path, sid string, create bool) (files []*os.F
 			return files, err
 		}
 		if err := checkWindowsSettingsACL(file, sid, index < 2, index < 3); err != nil {
-			return files, err
+			// 仅在拒绝时追加目录和模式，区分ConfigDir与更高祖先；层级从settings-locks=0向上递增。
+			// 原私有/所有者判定保持不变，错误链保留原分类；原因在前、字段分行，便于截断采集诊断。
+			return files, fmt.Errorf("%w\n目录层级=%d private=%t currentOwner=%t\n目录=%q", err, index, index < 2, index < 3, directory)
 		}
 		opened, err := file.Stat()
 		if err != nil {

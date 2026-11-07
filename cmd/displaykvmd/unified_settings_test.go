@@ -34,10 +34,13 @@ func TestUnifiedSettingsOptions(t *testing.T) {
 			t.Fatalf("接受无效完整路径%q: %v", path, err)
 		}
 	}
-	opts, err := parseOptions([]string{"-startup-profile", "/profile.json"}, func(string) (loginstart.ServiceProfile, error) {
-		return loginstart.ServiceProfile{Version: 2, ConfigPath: "/settings.json"}, nil
+	root := t.TempDir()
+	settingsPath := filepath.Join(root, "settings.json")
+	profilePath := filepath.Join(root, "profile.json")
+	opts, err := parseOptions([]string{"-startup-profile", profilePath}, func(string) (loginstart.ServiceProfile, error) {
+		return loginstart.ServiceProfile{Version: 2, ConfigPath: settingsPath}, nil
 	})
-	if err != nil || opts.settingsPath != "/settings.json" || opts.toolPath != "" {
+	if err != nil || opts.settingsPath != settingsPath || opts.toolPath != "" {
 		t.Fatalf("v2未进入完整文档入口: %+v %v", opts, err)
 	}
 }

@@ -5,14 +5,14 @@
 - 项目归属：`/Users/orzlee/work/project/other/displayKvm`，工作名称 displayKvm
 - 总计划：[显示器切换工具开发](../任务计划/【20261105-显示器切换工具开发】.md)
 - 批准设计：[显示器控制与交付缺口补全设计](../superpowers/specs/2026-11-07-display-control-completion-design.md)
-- 对应需求：补全设计 R7；状态：进行中（原软件及第2轮诊断静态PASS保留，rc2原生root测试exit1；28/25/24修复不计29新补做，完整九包/发布未验）
-- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T12:58:18+08:00（rc2下游失败及24额外授权范围结果登记时间，不是完成时刻）
+- 对应需求：补全设计 R7；状态：进行中（原软件/诊断PASS与rc3 Windows root exit1保留；本次24/28追加局部PASS，workflow未写、29两轮不变，九包/下载/发布未验）
+- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T13:52:11+08:00（父转交本次局部证据及29额度不变，不是完成时刻）
 - 实际完成时间：未完成；权威完成字段为本字段，归档时间另记
 - 当前文件位置：`docs/待办事项/待办事项-20261105-显示器切换工具开发-29-Windows候选与Actions发布-进行中.md`
 - 所属系列主会话 ID：`ses_e4cc8a233ffeDDjHm7v7yPI8S3`；文档执行者：`ses_e4ca67d8affe48ddN4S1MR1ZXf`
 - 专属实施子代理会话：`ses_e4c2221a5ffe465gK11LdyFkpr`，第2轮仅Windows workflow诊断补做完成停写；原独验 `ses_e4bff311bffetgk8CWAyNcrqpC` 本轮最终更正为静态PASS、动态pwsh留24，最新输入估计61K由父转交。首次独验 `ses_e4c0fbbb4ffey6Rn74YMyPvUUB` 失败/输入计量未知不追加；第1轮软件PASS、首败及累计次数均保留
 - 执行批次/并行组：补全第2组/共享脚本串行接管28，先于30
-- 本次选中范围：25、26、27、28、29、30及24软件验证部分；第1轮PE夹具补做证据保留，当前第2轮只改 `.github/workflows/build.yml` 的windows-native测试步骤：捕获stdout/stderr、保留原exit和测试scope，输出有界安全错误context为public error annotation；不改测试flags/timeout/范围，不修猜测产品，不执行CI/API/Git
+- 本次选中范围：25、26、27、28、29、30及24软件验证部分；原第1轮PE夹具、第2轮Windows诊断的证据/两轮计数保留。本次五文件extra1仅归24/28，三lane均STOP且局部独验PASS；workflow本轮未写、不增加29额度，不将局部PASS当原生/真实载荷或下载通过
 - 授权依据与停止边界：用户2026-11-07已通过 question 明确批准“按设计实施”；本任务已获准修改workflow与脚本，实现artifact上传和Release发布入口；实现入口不等于已执行发布。本轮不实际推送、触发Actions或创建Release，实际外部执行及下载核对在24软件验证阶段按已有授权和届时明确指令执行。各角色仅执行本编号，不扩到其他任务；终点为真实硬件验收准备，不提交、不新增安装器、不操作硬件。
 - 版本背景：主会话转交分支 `feat/display-control-completion`、基点 `f26ecf2`；文档执行者未执行 Git 核验或改变 Git 状态
 - 历史路径迁移状态：2026-11-07随开工从未完成后缀改为进行中后缀，不覆盖目标并同步链接；01–23归档身份和历史证据不改
@@ -86,7 +86,7 @@ Windows GUI+daemon+CLI配套，amd64/arm64支持程度依据实际证据；增�
 - 首次失败证据：唯一 `go test ./packaging/notices -count=1 -v` 失败，准确退出码未回报；唯一失败 `TestWindowsPERejectsWrongMachineDLLAndConsoleGUI/arm64-gui`，定位 `packaging/notices/windows_test.go:63`、`packaging/notices/windows_test.go:77`，错误为 `size of data directories(128) is inconsistent with number of data directories(0)`。主会话转交根因是最小PE测试夹具不完整；其余定向用例通过，但总体未通过。第1轮只修夹具，不放松生产PE校验。
 - 第1轮补做与精确证据：仅 `packaging/notices/windows_test.go:72-74` 修正最小PE夹具，设置 `NumberOfRvaAndSizes` 为16并补原因注释；生产解析器 `packaging/notices/windows.go:94-116` 与测试拒绝/成功断言 `packaging/notices/windows_test.go:56-59`、`packaging/notices/windows_test.go:79-82` 均未改。相关测试文件未跟踪，diff无内容；独验读取实际文件确认，不因此暂存或改变Git状态。
 - 有因重验与静态证据：新独验唯一 `go test ./packaging/notices -count=1 -v` exit0，4个PE样例/全包通过，限定diffcheck exit0；本轮新增Ruby/Psych解析workflow exit0，`"on"` 已引用，不受YAML 1.1误转影响。三程序、来源/架构配对、许可和CI门控合同静态PASS；首次shell/Python/JSON证据复用，无yq未解析YAML是首轮历史，本轮由Ruby/Psych补充解析，不记为yq执行。
-- 当前验证状态：第1轮软件scope PASS与第2轮诊断静态PASS保留；rc1当时失败根因未知、不按耗时判timeout，rc2已取annotations HTTP200，Windows两arch root go test exit1，定位未用import及测试夹具问题。修复后只范围/交叉编译通过，不冒称Windows原生全测试或九包/Release/下载通过，不归档或增加完成数。
+- 当前验证状态：原软件/诊断PASS及rc1–rc3真实失败保留；本次24实际两测试diff及仅拒绝诊断的lockdiff审阅PASS，hostrace 1package/47testevents pass、0fail/0skip，双arch两包四条compile-only exit0、三路径diffcheck0。锁实际根因仍未知，需下一CI必要owner/ACE，安全政策未改、PE未运行、无后台helper；Linux静态PASS无真实生成，九包/下载/Release仍缺。本机/交叉编译PASS不等原生通过，不归档。
 - 次数与停止边界：原Go定向累计2次（首次失败1+第1轮有因重测1 exit0）、Go有因重测1；产品总补做2轮，均已停写，第2轮仅诊断静态PASS。验证者20,577byte理由撤回为核算错误，不计第三轮产品补做；后续不得自动第三轮29返修。本轮无动态pwsh执行、无CI/API/Git或产品tests/build，旧失败/次数不清零。
 - 依赖放行证据：28实施终态停写、notices单测/静态检查exit0，真实载荷仍缺；主会话明确允许29先实现Windows/CI独立生产路径。全量与实际外部执行仍归24末尾统一指令。
 - 外部准备历史（父转交，taskdocs未执行Git）：原push dryrun `HEAD→refs/heads/feat/display-control-completion` exit0、would-create无副作用，不等于当时已推送。随后真实commit `37cf7d819ef2d870faa0350328bab32c05be8549`、feature branch与tag `v0.0.1-rc.20261107.1` 推送核验exit0并触发[run42335499920](https://github.com/orzlees/display-kvm/actions/runs/42335499920)；CI结果见下条，保留tag路径，不称已发布或可下载。
@@ -97,7 +97,8 @@ Windows GUI+daemon+CLI配套，amd64/arm64支持程度依据实际证据；增�
 - 文档短锁：本轮由实际文档执行者正常获取，写后核对后释放；不把随机令牌写入正文、不持锁等待实施；系列占用仍归所属主会话。
 - rc2及修复归属（父转交）：tag `v0.0.1-rc.20261107.2`、commit `0563fe07c6652b9bd881541537cfd46f75ce6a0b`、[run 42338704107](https://github.com/orzlees/display-kvm/actions/runs/42338704107)。Windows amd64 job128301407269/arm64 job128301407117 root go test exit1、annotations HTTP200，未用os import及Darwin后端/设置测试的跨平台夹具问题见24；core/全部GUI/release skipped，无包/下载/Release可验。28第2最后补做仅Linux flag/开发依赖/说明，Windows workflow、九包门控及发布条款不变；25第1补做删import、24用户额外授权1轮仅两测试文件，不计29新补做或增加额度。
 - 24额外授权结果：原独验独立执行两包联合hostrace一次exit0，2package+188test pass、0fail/0skip，另Windows双arch每arch两包compile-only共4commands exit0、diffcheck0，两文件实际范围审阅PASS、无缺口，无重跑、生成PE未运行/未打包。历史24两轮不清零，root25包复验只计有因命令复验；本次额外1轮只执行一次、无失败返修，不扩29/28额度，整个24仍未完成。
-- 下一步：父正式放行后才由其他执行者正常commit/push及新annotated tag `v0.0.1-rc.20261107.3`；tag尚未创建/推送、CI尚未发生。Linux双arch payload、Windows原生动态、九包/下载/Release及硬件欠项保留，累计23/30不归档。29总补做2轮，不自动第三轮；五文档读回释放本人锁后FREEZE停止写入，父占用保留，无额外报告或业务复验。
+- rc3实际结果（父转交）：commit `e3d67c533fe968e0dea4548cb5582ee0481fad0a`、tag `v0.0.1-rc.20261107.3` 已真实推送，对应[run42341866318](https://github.com/orzlees/display-kvm/actions/runs/42341866318)。Windows arm64 job128311118696/amd64 job128311118855原生无屏产品测试root go test exit1，annotations含配置锁路径permission_denied/不可信主体、loginstart `flag provided but not defined: -config`；具体生产/测试归因待查。Linux两arch也失败，prepare成功、core/GUI/release全部skipped，无archive/Release证据；证据为24记录的rc3-ci目录下 `annotations-128311118696.json`、`annotations-128311118855.json`，本角色不读取重验。
+- 当前授权与下一步：用户本次另准五文件extra1已使用，三lane均终态STOP，原28 validator静态scope PASS、原24独验final局部PASS，详见[24当前授权与局部独验](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。真实证据为 `/private/var/folders/82/9v48ldbs4ng513qh7_wtlx8m0000gn/T/opencode/displaykvm-final-rc4-local/summary.json`，已确认fresh独占无覆盖；taskdocs不读报告。29 workflow本轮未写、原两轮不增加，28原两轮+本次extra1及24历史两轮+上次extra1+本次extra1保留，不自动更多。锁诊断不放宽owner/ACE/reparse/link/可信SID/错误码，实际根因仍未知；rc4尚未commit/tag/push，不编造SHA/run。四taskdocs读回释放本人锁后FREEZE、无待写，供其他Git执行者精确提交产品5+文档4共9路径，父占用保留，23/30不归档。
 
 ## 完成、归档与迁移
 

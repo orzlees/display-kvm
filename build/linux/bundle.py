@@ -450,9 +450,11 @@ def generate(args):
     command(["make", "-j" + str(args.jobs)], ddc, log, extra=build_env)
     systemd_build = work / "systemd-build"
     command(["meson", "setup", systemd_build, trees["systemd"], *pins["systemd"]["meson"]], work, log, extra=build_env)
-    command(["meson", "compile", "-C", systemd_build, "-j", str(args.jobs), "busctl.standalone", "udevadm.standalone"], work, log, extra=build_env)
-    binaries = {"ddcutil": ddc / "src" / "ddcutil", "busctl": systemd_build / "busctl.standalone",
-                "udevadm": systemd_build / "udevadm.standalone"}
+    # 固定systemd v258的standalone选项只筛选现有目标，不添加.standalone后缀；
+    # 构建和取件必须沿用上游名称，否则Meson找不到目标或后续无法读取产物。
+    command(["meson", "compile", "-C", systemd_build, "-j", str(args.jobs), "busctl", "udevadm"], work, log, extra=build_env)
+    binaries = {"ddcutil": ddc / "src" / "ddcutil", "busctl": systemd_build / "busctl",
+                "udevadm": systemd_build / "udevadm"}
     libraries = {}
     for binary in binaries.values():
         for name, location in resolved_dependencies(regular(binary), work, log, args.arch).items():

@@ -43,9 +43,9 @@ make -j2
 
 构建 ddcutil 3.0.2 还需要 libudev-dev；生成时由现有闭包生成器收集并校验运行库及其 Debian 对应源码、版权声明。
 
-systemd v258使用Meson、Ninja、C编译器、Python/Jinja2、gperf、pkg-config、libcap及libmount等构建依赖。采用上游 `-Dstandalone-binaries=true`，从独立暂存产物选取busctl.standalone和udevadm.standalone并按客户端约定命名。standalone静态纳入systemd私有代码，但不代表完全静态可移植；glibc及其它外部库仍需检查。具体可选依赖须按最终Meson配置和实际产物核验，不能在本机未构建时宣称闭包完整。
+systemd v258使用Meson、Ninja、C编译器、Python/Jinja2、gperf、pkg-config、libcap及libmount等构建依赖。采用上游 `-Dstandalone-binaries=true`，编译实际名为 `busctl` 和 `udevadm` 的目标，从构建目录读取同名产物，随包客户端名称也保持为 `busctl` 和 `udevadm`。该选项只筛选现有目标，不产生 `.standalone` 后缀。standalone静态纳入systemd私有代码，但不代表完全静态可移植；glibc及其它外部库仍需检查。具体可选依赖须按最终Meson配置和实际产物核验，不能在本机未构建时宣称闭包完整。
 
-完整Meson参数保存在来源锁定文件：禁止自动下载子项目，禁用可选自动功能、测试、文档、bootloader和BPF框架，只编译上述两个standalone目标。构建进程使用固定PATH/区域设置、SOURCE_DATE_EPOCH及源码路径映射，不继承个人编译参数、LD_LIBRARY_PATH或包查找路径。配方会记录实际工具及已安装包版本，但尚无两次真实构建的字节一致性证据。
+完整Meson参数保存在来源锁定文件：禁止自动下载子项目，禁用可选自动功能、测试、文档、bootloader和BPF框架，只编译 `busctl` 和 `udevadm` 两个目标。构建进程使用固定PATH/区域设置、SOURCE_DATE_EPOCH及源码路径映射，不继承个人编译参数、LD_LIBRARY_PATH或包查找路径。配方会记录实际工具及已安装包版本，但尚无两次真实构建的字节一致性证据。
 
 ## 原生生成入口与CI交接
 
