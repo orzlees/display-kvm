@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -26,8 +27,18 @@ func (f runnerFunc) Run(ctx context.Context, path string, args ...string) (Comma
 	return f(ctx, path, args...)
 }
 
+func testToolPath() string {
+	// 后端虽模拟darwin/arm64，绝对路径仍由宿主平台判断；保留空格可验证
+	// 路径原样传给注入执行器，避免Windows在进入模拟命令前就拒绝POSIX路径。
+	path, err := filepath.Abs(filepath.Join("user supplied", "m1ddc"))
+	if err != nil {
+		panic(fmt.Sprintf("无法构造测试工具的绝对路径：%v", err))
+	}
+	return path
+}
+
 func testBackend(runner CommandRunner) *Backend {
-	b := New("/user supplied/m1ddc", runner)
+	b := New(testToolPath(), runner)
 	b.goos, b.goarch = "darwin", "arm64"
 	return b
 }
@@ -84,7 +95,7 @@ func TestEnumerateAndCapabilitiesUseCurrentUUIDs(t *testing.T) {
 	calls := 0
 	b := testBackend(runnerFunc(func(_ context.Context, path string, args ...string) (CommandOutput, error) {
 		calls++
-		if path != "/user supplied/m1ddc" || !reflect.DeepEqual(args, []string{"display", "list"}) {
+		if path != testToolPath() || !reflect.DeepEqual(args, []string{"display", "list"}) {
 			t.Fatalf("只允许显式路径和枚举参数，得到%q %q", path, args)
 		}
 		return CommandOutput{Stdout: firstList + "[2] Other (" + secondUUID + ")\n"}, nil
@@ -177,7 +188,7 @@ func TestExplicitInputStrategiesAndSendEvidence(t *testing.T) {
 		t.Run(fmt.Sprintf("%s/%d", tc.protocol, tc.value), func(t *testing.T) {
 			var commands [][]string
 			b := testBackend(runnerFunc(func(_ context.Context, path string, args ...string) (CommandOutput, error) {
-				if path != "/user supplied/m1ddc" {
+				if path != testToolPath() {
 					t.Fatalf("输入操作必须直接使用显式工具路径：%q", path)
 				}
 				commands = append(commands, append([]string(nil), args...))

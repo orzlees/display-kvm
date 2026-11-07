@@ -10,7 +10,7 @@
       "url": "https://codeload.github.com/rockowitz/ddcutil/tar.gz/5085ae9bb1a8e5bd8db717d80dd80a279a0f05fb",
       "sha256": "c5c271131ba40e009f0a71a04e8856f4ca4647e9e22d38e23344fdc7714fcc28",
       "license": "GPL-2.0-or-later",
-      "configure": ["--prefix=/usr", "--disable-usb", "--disable-udev", "--disable-systemd", "--disable-dbus", "--disable-x11", "--disable-lib", "--disable-build-timestamp", "--enable-drm"]
+      "configure": ["--prefix=/usr", "--disable-usb", "--disable-systemd", "--disable-dbus", "--disable-x11", "--disable-lib", "--disable-build-timestamp", "--enable-drm"]
     },
     {
       "name": "systemd",

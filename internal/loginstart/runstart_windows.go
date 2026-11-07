@@ -8,7 +8,6 @@ import (
 	"debug/pe"
 	"errors"
 	"io"
-	"os"
 	"path/filepath"
 	"runtime"
 	"slices"

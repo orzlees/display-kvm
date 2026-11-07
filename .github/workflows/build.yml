@@ -107,10 +107,12 @@ jobs:
           sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/debian.sources
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
+          # ddcutil 3.0.2 的显示器监测对象依赖 libudev；禁用 udev 会让该固定版本在链接时缺少监测符号。
+          # 开发包用于生成对象，运行库及其源码、许可继续由闭包校验收集。
           apt-get install -y --no-install-recommends \
             ca-certificates git build-essential autoconf automake libtool pkg-config \
             meson ninja-build gperf python3 python3-jinja2 patchelf binutils dpkg-dev apt \
-            gzip xz-utils tar libglib2.0-dev libjansson-dev libacl1-dev libdrm-dev \
+            gzip xz-utils tar libglib2.0-dev libjansson-dev libacl1-dev libdrm-dev libudev-dev \
             libcap-dev libmount-dev libblkid-dev libcrypt-dev
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

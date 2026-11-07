@@ -5,8 +5,8 @@
 - 项目归属：`/Users/orzlee/work/project/other/displayKvm`，工作名称 displayKvm
 - 总计划：[显示器切换工具开发](../任务计划/【20261105-显示器切换工具开发】.md)
 - 批准设计：[显示器控制与交付缺口补全设计](../superpowers/specs/2026-11-07-display-control-completion-design.md)
-- 对应需求：补全设计 R7；状态：进行中（第1轮软件scope PASS保留；rc1 Windows原生测试实际FAIL，第2轮诊断补做停写且最终静态PASS，动态pwsh留24）
-- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T12:09:27+08:00（第2轮诊断最终静态PASS及验证者核算纠正登记时间，不是完成时刻）
+- 对应需求：补全设计 R7；状态：进行中（原软件及第2轮诊断静态PASS保留，rc2原生root测试exit1；28/25/24修复不计29新补做，完整九包/发布未验）
+- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T12:58:18+08:00（rc2下游失败及24额外授权范围结果登记时间，不是完成时刻）
 - 实际完成时间：未完成；权威完成字段为本字段，归档时间另记
 - 当前文件位置：`docs/待办事项/待办事项-20261105-显示器切换工具开发-29-Windows候选与Actions发布-进行中.md`
 - 所属系列主会话 ID：`ses_e4cc8a233ffeDDjHm7v7yPI8S3`；文档执行者：`ses_e4ca67d8affe48ddN4S1MR1ZXf`
@@ -21,7 +21,7 @@
 
 补齐 Windows 配套候选产物、原生无屏测试与 Actions 制品/条件发布入口，沿用现有构建包装体系，真实运行与下载结果由24末尾核实。
 
-交付物：初次8文件、第1轮仅PE夹具补做及软件scope PASS证据保留；第2轮仅workflow诊断补做已停写并取得最终静态PASS，动态pwsh留24。24首CI的Windows两arch原生测试已实际FAIL、根因未知，诊断静态PASS只为rc2取得真正错误，不等于CI已修复或成功。28真实载荷、完整候选/下载/Release缺口保留，任务未完成。
+交付物：初次8文件、第1轮PE夹具和第2轮诊断静态PASS证据保留；rc1当时原生FAIL/根因未知，rc2已取到Windows编译与跨平台测试夹具错误，但仍root go test exit1。28 Linux依赖/来源flag、25删除未用import和24额外授权两测试文件修复分别归原任务，不计29第三轮；完整候选/下载/Release仍未验。
 
 ## 前置依赖、放行与调度
 
@@ -62,7 +62,7 @@ Windows GUI+daemon+CLI配套，amd64/arm64支持程度依据实际证据；增�
 - [x] 新同编号独验 `ses_e4bff311bffetgk8CWAyNcrqpC` 按首次失败原因完成唯一有因重测并终态PASS；首次失败证据与旧验证者输入计量未知的记录保留，不再向旧会话追加。
 - [x] 第2轮仅windows-native步骤捕获stdout/stderr及有界安全错误annotation，保留原exit、flags、timeout/范围；已停写，不猜原生根因或改产品逻辑。
 - [x] 原专属独验报告最终静态PASS，YAML/Psych/diff0及纯数学Python核算exit0；撤回20,577byte核算错误的唯一FAIL理由，非第三轮代码补做。
-- [ ] 动态pwsh留24；本机pwsh入口exit1、未安装未执行，不称PowerShell运行通过。rc2尚未commit/push/触发，静态PASS仅放行取得真实错误。
+- [ ] rc2已实际取得Windows root失败annotations，不能将原诊断静态PASS当作Windows全测试通过；本机pwsh入口exit1、未安装未执行的历史保留，动态语义按24实际证据核查，不冒称已完成。rc3尚未创建/推送或触发CI。
 
 ## 定向验收标准
 
@@ -86,16 +86,18 @@ Windows GUI+daemon+CLI配套，amd64/arm64支持程度依据实际证据；增�
 - 首次失败证据：唯一 `go test ./packaging/notices -count=1 -v` 失败，准确退出码未回报；唯一失败 `TestWindowsPERejectsWrongMachineDLLAndConsoleGUI/arm64-gui`，定位 `packaging/notices/windows_test.go:63`、`packaging/notices/windows_test.go:77`，错误为 `size of data directories(128) is inconsistent with number of data directories(0)`。主会话转交根因是最小PE测试夹具不完整；其余定向用例通过，但总体未通过。第1轮只修夹具，不放松生产PE校验。
 - 第1轮补做与精确证据：仅 `packaging/notices/windows_test.go:72-74` 修正最小PE夹具，设置 `NumberOfRvaAndSizes` 为16并补原因注释；生产解析器 `packaging/notices/windows.go:94-116` 与测试拒绝/成功断言 `packaging/notices/windows_test.go:56-59`、`packaging/notices/windows_test.go:79-82` 均未改。相关测试文件未跟踪，diff无内容；独验读取实际文件确认，不因此暂存或改变Git状态。
 - 有因重验与静态证据：新独验唯一 `go test ./packaging/notices -count=1 -v` exit0，4个PE样例/全包通过，限定diffcheck exit0；本轮新增Ruby/Psych解析workflow exit0，`"on"` 已引用，不受YAML 1.1误转影响。三程序、来源/架构配对、许可和CI门控合同静态PASS；首次shell/Python/JSON证据复用，无yq未解析YAML是首轮历史，本轮由Ruby/Psych补充解析，不记为yq执行。
-- 当前验证状态：第1轮软件scope PASS与第2轮诊断最终静态PASS均保留；真实Windows两原生测试FAIL、根因未知，不按耗时判timeout。动态pwsh留24，本机入口exit1、未安装未执行；九包/完整Release/下载未验证，不据静态结果宣称运行通过，不归档或增加完成数。
+- 当前验证状态：第1轮软件scope PASS与第2轮诊断静态PASS保留；rc1当时失败根因未知、不按耗时判timeout，rc2已取annotations HTTP200，Windows两arch root go test exit1，定位未用import及测试夹具问题。修复后只范围/交叉编译通过，不冒称Windows原生全测试或九包/Release/下载通过，不归档或增加完成数。
 - 次数与停止边界：原Go定向累计2次（首次失败1+第1轮有因重测1 exit0）、Go有因重测1；产品总补做2轮，均已停写，第2轮仅诊断静态PASS。验证者20,577byte理由撤回为核算错误，不计第三轮产品补做；后续不得自动第三轮29返修。本轮无动态pwsh执行、无CI/API/Git或产品tests/build，旧失败/次数不清零。
 - 依赖放行证据：28实施终态停写、notices单测/静态检查exit0，真实载荷仍缺；主会话明确允许29先实现Windows/CI独立生产路径。全量与实际外部执行仍归24末尾统一指令。
 - 外部准备历史（父转交，taskdocs未执行Git）：原push dryrun `HEAD→refs/heads/feat/display-control-completion` exit0、would-create无副作用，不等于当时已推送。随后真实commit `37cf7d819ef2d870faa0350328bab32c05be8549`、feature branch与tag `v0.0.1-rc.20261107.1` 推送核验exit0并触发[run42335499920](https://github.com/orzlees/display-kvm/actions/runs/42335499920)；CI结果见下条，保留tag路径，不称已发布或可下载。
 - rc1真实环境结果（父转交）：Windows amd64 job `128291408104`、arm64 job `128291408141` 的“原生无屏产品测试”均failure，step分别03:47:07Z→03:57:28Z、03:47:41Z→03:58:04Z；根因未知，不凭耗时认定timeout、不补造exit码。Linux两生成job失败且日志403、annotations仅泛exit1，详见24；core/release/desktop-windows/desktop-macos-arm64均skipped，无候选归档/Release可验。最后direct run仍in_progress、停止查询前未核terminal，不写run已终结。
-- 第2轮诊断最终范围：仅workflow windows-native步骤捕获stdout/stderr并保留原exit/scope，将有界安全错误context写public error annotation，flags/timeout/范围未改、不修猜测产品。实施已停写、原独验最终静态PASS；两go test参数scope、原退出码、root失败阻断desktop、成功无annotation及有界摘要均静态通过，YAML/Psych/diff0。28第1轮诊断scope PASS复用，rc2 `v0.0.1-rc.20261107.2` 尚未commit/push/触发，静态PASS只为取得两类真实错误，不称根因已解决。
+- 第2轮诊断最终范围：仅workflow windows-native捕获stdout/stderr并保留原exit/scope、flags/timeout/范围，输出有界安全error annotation；原独验最终静态PASS，YAML/Psych/diff0，相关数学核算及纠正保留。该阶段冻结时rc2尚未commit/push/触发，后续真实rc2结果另列，不把静态检查冒充当时已通过CI。
 - 验证者纠正与动态缺口：先前20,577byte FAIL由汉字UTF8与%转义重复乘3的核算错误导致，唯一FAIL理由已明确撤回；不是第三轮代码补做。实际纯CJK/%/CR/LF样例6890byte、emoji4622byte，保守上界6942<8192，纯数学Python核算exit0；不冒充PowerShell运行。本机pwsh入口exit1、未安装未执行，动态pwsh留24，不能从静态推断其执行结果。
 - 批次放行、批次收口及系列收尾：尚未发生；26/29返修独验已PASS且30交付/范围验收完成后，24先生成核验Linux两arch物料，成功后补28实际证据、独立核验并一次批次收口；不要求预先28归档或收口才运行CI生成，失败挡全量/完整发布。系列收尾复用证据。
 - 文档短锁：本轮由实际文档执行者正常获取，写后核对后释放；不把随机令牌写入正文、不持锁等待实施；系列占用仍归所属主会话。
-- 下一步：29第2轮诊断已停写并最终静态PASS，动态pwsh留24；rc2尚未commit/push/触发，由父另发Git契约，不由taskdocs执行。24本机root/desktop及原scope PASS、30文档PASS复用，首CI真实失败/未知根因及28真实物料缺口保留，累计23/30、24未完成。总补做2轮，不自动第三轮29返修；全部产品writer已停写，四文档读回释放本人锁、父占用保留并FREEZE停止所有写入，无额外报告/检查点或业务复验。
+- rc2及修复归属（父转交）：tag `v0.0.1-rc.20261107.2`、commit `0563fe07c6652b9bd881541537cfd46f75ce6a0b`、[run 42338704107](https://github.com/orzlees/display-kvm/actions/runs/42338704107)。Windows amd64 job128301407269/arm64 job128301407117 root go test exit1、annotations HTTP200，未用os import及Darwin后端/设置测试的跨平台夹具问题见24；core/全部GUI/release skipped，无包/下载/Release可验。28第2最后补做仅Linux flag/开发依赖/说明，Windows workflow、九包门控及发布条款不变；25第1补做删import、24用户额外授权1轮仅两测试文件，不计29新补做或增加额度。
+- 24额外授权结果：原独验独立执行两包联合hostrace一次exit0，2package+188test pass、0fail/0skip，另Windows双arch每arch两包compile-only共4commands exit0、diffcheck0，两文件实际范围审阅PASS、无缺口，无重跑、生成PE未运行/未打包。历史24两轮不清零，root25包复验只计有因命令复验；本次额外1轮只执行一次、无失败返修，不扩29/28额度，整个24仍未完成。
+- 下一步：父正式放行后才由其他执行者正常commit/push及新annotated tag `v0.0.1-rc.20261107.3`；tag尚未创建/推送、CI尚未发生。Linux双arch payload、Windows原生动态、九包/下载/Release及硬件欠项保留，累计23/30不归档。29总补做2轮，不自动第三轮；五文档读回释放本人锁后FREEZE停止写入，父占用保留，无额外报告或业务复验。
 
 ## 完成、归档与迁移
 

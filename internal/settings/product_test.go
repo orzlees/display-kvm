@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -193,27 +194,61 @@ func settingsProductTools(t *testing.T) (controltools.Resolver, controltools.Pat
 }
 
 func TestSettingsProductServiceResolutionDoesNotPersistInstalledPaths(t *testing.T) {
-	resolver, want := settingsProductTools(t)
-	doc := NewDocument()
-	before := doc
-	resolved, err := doc.ValidateForService(resolver)
-	if err != nil || resolved != want {
-		t.Fatalf("空工具应解析为随包工具而非要求填写: %+v %v", resolved, err)
+	type resolutionCase struct {
+		name        string
+		resolver    controltools.Resolver
+		paths, want controltools.Paths
 	}
-	if !reflect.DeepEqual(doc, before) || doc.Runtime != (controltools.Paths{}) {
-		t.Fatal("解析后的安装绝对路径不得写回可移动完整文档")
+	var cases []resolutionCase
+	if runtime.GOOS == "windows" {
+		// Windows文件元信息不提供POSIX执行位，强制Linux解析会先拒绝本机夹具。
+		// 实际调用Windows分支覆盖空配置及缺失/现存历史工具；运行用空路径不得
+		// 清除文档中的历史覆盖，否则切回原平台会丢失高级配置。
+		directory := t.TempDir()
+		_, legacy := settingsProductTools(t)
+		cases = []resolutionCase{
+			{name: "empty", resolver: controltools.Resolver{GOOS: "windows"}},
+			{
+				name:     "missing-legacy",
+				resolver: controltools.Resolver{GOOS: "windows", Executable: filepath.Join(directory, "missing-displaykvmd.exe")},
+				paths: controltools.Paths{
+					ToolPath: filepath.Join(directory, "missing-ddcutil"), BusctlPath: filepath.Join(directory, "missing-busctl"),
+					UdevadmPath: filepath.Join(directory, "missing-udevadm"),
+				},
+			},
+			{name: "present-legacy", resolver: controltools.Resolver{GOOS: "windows", Executable: "relative-displaykvmd.exe"}, paths: legacy},
+		}
+	} else {
+		// 非Windows保留Linux完整随包夹具，持续核对三项工具解析及安装路径不回写。
+		resolver, want := settingsProductTools(t)
+		cases = []resolutionCase{{name: "bundled-linux", resolver: resolver, want: want}}
 	}
-	var encoded bytes.Buffer
-	if err := Encode(&encoded, doc); err != nil {
-		t.Fatal(err)
-	}
-	loaded, err := Load(&encoded)
-	if err != nil || loaded.Runtime != (controltools.Paths{}) {
-		t.Fatalf("服务就绪校验后保存仍应保留空覆盖设置: %+v %v", loaded.Runtime, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := NewDocument()
+			doc.Runtime = tc.paths
+			before := doc
+			resolved, err := doc.ValidateForService(tc.resolver)
+			if err != nil || resolved != tc.want {
+				t.Fatalf("服务工具解析结果不符: got=%+v want=%+v %v", resolved, tc.want, err)
+			}
+			if !reflect.DeepEqual(doc, before) || doc.Runtime != tc.paths {
+				t.Fatal("解析不得回写安装绝对路径或清除文档中的历史覆盖")
+			}
+			var encoded bytes.Buffer
+			if err := Encode(&encoded, doc); err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := Load(&encoded)
+			if err != nil || loaded.Runtime != tc.paths {
+				t.Fatalf("服务就绪校验后保存应保留原覆盖且不新增安装路径: got=%+v want=%+v %v", loaded.Runtime, tc.paths, err)
+			}
+		})
 	}
 
+	doc := NewDocument()
 	doc.Desktop.Language = "invalid"
-	resolved, err = doc.ValidateForService(controltools.Resolver{GOOS: "unsupported"})
+	resolved, err := doc.ValidateForService(controltools.Resolver{GOOS: "unsupported"})
 	var validation *model.Error
 	if !errors.As(err, &validation) || validation.Code != model.CodeInvalidConfig || validation.Field != "desktop.language" || resolved != (controltools.Paths{}) {
 		t.Fatalf("必须先报告文档错误，不得先调用解析器或返回部分路径: %+v %v", resolved, err)

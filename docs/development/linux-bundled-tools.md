@@ -27,19 +27,21 @@
 - C/C++编译与Autotools：GCC、Make、Autoconf、Automake、Libtool、m4，以及标准Linux开发头文件。
 - systemd构建：Meson至少0.62、Ninja、gperf、Python3.11和Jinja2。
 - 元数据与归档：pkg-config、patchelf、binutils的readelf、ldd、getconf、dpkg-query、dpkg-deb、apt-cache、apt-get、gzip、xz、tar。
-- 开发库：GLib、Jansson、ACL、libdrm至少2.4.67、libcap、libmount/libblkid和libxcrypt。Debian包通常对应 `build-essential autoconf automake libtool pkg-config meson ninja-build gperf python3 python3-jinja2 patchelf binutils dpkg-dev apt gzip xz-utils tar libglib2.0-dev libjansson-dev libacl1-dev libdrm-dev libcap-dev libmount-dev libblkid-dev libcrypt-dev`，最终缺项以固定源码配置错误为准。
+- 开发库：GLib、Jansson、ACL、libdrm至少2.4.67、libudev、libcap、libmount/libblkid和libxcrypt。Debian包通常对应 `build-essential autoconf automake libtool pkg-config meson ninja-build gperf python3 python3-jinja2 patchelf binutils dpkg-dev apt gzip xz-utils tar libglib2.0-dev libjansson-dev libacl1-dev libdrm-dev libudev-dev libcap-dev libmount-dev libblkid-dev libcrypt-dev`，最终缺项以固定源码配置错误为准。
 - 已经由APT验证的Debian官方二进制和deb-src索引，必须仍包含每个已安装运行库的精确版本。只接受 `deb.debian.org`、`security.debian.org` 的无凭据来源。索引缺失、版本已被镜像淘汰或只配置第三方镜像时停止，不降级版本或隐式切换镜像。CI镜像提供者须固定原生镜像和相应索引，不能只指定浮动的Debian标签。
 
 ddcutil沿用现有裁剪配方，额外关闭构建时间戳以减少时间变化；生成器设置 `NOCONFIGURE=1` 后运行autogen，再显式配置：
 
 ```sh
 NOCONFIGURE=1 ./autogen.sh
-./configure --prefix=/usr --disable-usb --disable-udev --disable-systemd \
+./configure --prefix=/usr --disable-usb --disable-systemd \
   --disable-dbus --disable-x11 --disable-lib --disable-build-timestamp --enable-drm
 make -j2
 ```
 
 生成器直接选取本次构建树中的ELF，不执行install，不指向系统安装位置。该配置保留项目现有I2C DDC/CI路径，关闭USB显示器控制；项目USB事件监听仍由独立事件工具负责。DRM不可关闭，配置后检查 `USE_LIBDRM=1`，防止上游在缺开发文件时静默缩减能力。
+
+构建 ddcutil 3.0.2 还需要 libudev-dev；生成时由现有闭包生成器收集并校验运行库及其 Debian 对应源码、版权声明。
 
 systemd v258使用Meson、Ninja、C编译器、Python/Jinja2、gperf、pkg-config、libcap及libmount等构建依赖。采用上游 `-Dstandalone-binaries=true`，从独立暂存产物选取busctl.standalone和udevadm.standalone并按客户端约定命名。standalone静态纳入systemd私有代码，但不代表完全静态可移植；glibc及其它外部库仍需检查。具体可选依赖须按最终Meson配置和实际产物核验，不能在本机未构建时宣称闭包完整。
 
