@@ -27,8 +27,67 @@ ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C", "TZ": "UTC",
        "SOURCE_DATE_EPOCH": "1758585600", "PYTHONHASHSEED": "0"}
 
 
-def fail(message):
-    raise ValueError(message)
+def fail(message, *, log=None, log_start=0):
+    error = ValueError(message)
+    error.bundle_message = message
+    error.bundle_log = log
+    error.bundle_log_start = log_start
+    raise error
+
+
+def report_ci_failure(error):
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    stages = []
+    trace = error.__traceback__
+    while trace is not None:
+        if trace.tb_frame.f_code.co_filename == __file__ and trace.tb_frame.f_code.co_name not in {"<module>", "fail"}:
+            stages.append("%s:%d" % (trace.tb_frame.f_code.co_name, trace.tb_lineno))
+        trace = trace.tb_next
+    details = []
+    current = error
+    # 下载重试会把最后一个HTTPError包装为受控ValueError；保留异常链的类型和数值状态，
+    # 不读取异常原文、reason、headers或响应体，以免诊断暴露下载地址及认证信息。
+    for _ in range(4):
+        values = []
+        for name in ("code", "status", "errno"):
+            value = getattr(current, name, None)
+            if isinstance(value, int) and not isinstance(value, bool):
+                values.append("%s=%d" % (name, value))
+        details.append(type(current).__name__ + ("(" + ", ".join(values) + ")" if values else ""))
+        current = current.__cause__ or current.__context__
+        if current is None:
+            break
+    message = "异常类型：%s；阶段：%s\n%s" % (
+        " ← ".join(details), " → ".join(stages) or "入口或未知阶段",
+        getattr(error, "bundle_message", "输入、文件系统或归档异常；原始诊断保留在stderr"))
+    log = getattr(error, "bundle_log", None)
+    if log is None:
+        message += "\n本次异常没有失败子进程日志。"
+    else:
+        try:
+            info = regular(log)
+            # 只读本次失败命令的尾部，不能回带先前成功命令的输出；完整日志仍留在独占目录。
+            with log.open("rb") as stream:
+                stream.seek(max(error.bundle_log_start, info.stat().st_size - 6144))
+                tail = stream.read(6144).decode("utf-8", errors="replace")
+            tail = "\n".join(tail.splitlines()[-40:])
+            message += "\n失败子进程日志末尾（最多40行/6KiB，完整日志见work/build.log）：\n" + (tail or "日志为空。")
+        except (ValueError, OSError) as log_error:
+            message += "\n失败子进程日志不可读（%s）；完整日志仍留在独占目录。" % type(log_error).__name__
+    # 外部工具输出不可信：不回显任何URL、认证/请求头或环境赋值行，也不输出异常对象中的URL。
+    # 注释必须是单条工作流命令，先转义百分号再转义换行，避免日志伪造第二条命令或二次解码。
+    message = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", message)
+    message = re.sub(r"(?i)(?:https?|ftp)://[^\s'\"<>]+", "<source-url-redacted>", message)
+    lines = []
+    for line in message.splitlines(keepends=True):
+        if (re.search(r"(?i)authorization|cookie|password|passwd|credential|secret|token|api[-_ ]?key|access[-_ ]?key|headers?\s*[:=]|\b(?:environment|env)\b", line)
+                or re.match(r"\s*(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=", line)):
+            line = "<sensitive-diagnostic-redacted>" + line[len(line.rstrip("\r\n")):]
+        lines.append(line)
+    message = "".join(lines).encode("utf-8")[:8192].decode("utf-8", errors="ignore")
+    escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print("::error title=Linux工具载荷生成失败::" + escaped, file=sys.stderr)
 
 
 def regular(path):
@@ -71,12 +130,14 @@ def command(args, cwd, log, capture=True, extra=None):
     result = subprocess.run([str(item) for item in args], cwd=cwd, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     with log.open("ab") as stream:
+        log_start = stream.tell()
         stream.write(("\n$ " + shlex.join(str(item) for item in args) + "\n").encode())
         # APT配置可能来自runner；即使随后拒绝非官方来源，也不能先把私人镜像URL写入日志。
         stream.write(re.sub(rb"(?:https?|ftp)://[^\s'\"<>]+", b"<source-url-redacted>", result.stdout))
     if result.returncode:
-        # 完整错误只留在本次独占目录，避免下载器把镜像凭据或私人配置输出到控制台。
-        fail("命令失败：%s；退出码%d，详见本次work/build.log" % (Path(args[0]).name, result.returncode))
+        # 完整错误仍留在本次独占目录；CI仅额外发布经脱敏、限长和工作流转义的失败末尾。
+        fail("命令失败：%s；退出码%d，详见本次work/build.log" % (Path(args[0]).name, result.returncode),
+             log=log, log_start=log_start)
     return result.stdout.decode("utf-8", errors="strict") if capture else result.stdout
 
 
@@ -472,4 +533,5 @@ if __name__ == "__main__":
             print("Linux载荷生成失败：" + str(error), file=sys.stderr)
         else:
             print("Linux载荷生成失败：输入、文件系统或归档错误；请检查本次独占目录", file=sys.stderr)
+        report_ci_failure(error)
         sys.exit(1)

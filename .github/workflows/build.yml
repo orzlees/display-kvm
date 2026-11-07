@@ -182,10 +182,49 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw '锁定依赖预取失败' }
           $env:GOPROXY = 'off'
           $env:GOSUMDB = 'off'
-          go test ./cmd/... ./internal/... -count=1
-          if ($LASTEXITCODE -ne 0) { throw 'Windows核心测试失败' }
-          go -C desktop test ./... -count=1
-          if ($LASTEXITCODE -ne 0) { throw 'Windows桌面无屏测试失败' }
+          $testLogDirectory = Join-Path $env:RUNNER_TEMP ('displaykvm-windows-tests-' + [Guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory $testLogDirectory | Out-Null
+          $rootTestLog = Join-Path $testLogDirectory 'root.log'
+          $desktopTestLog = Join-Path $testLogDirectory 'desktop.log'
+          function Write-TestFailureAnnotation([string] $Phase, [string] $LogPath, [int] $TestExitCode) {
+            # 普通日志可能无法匿名读取；只从本次测试输出提取错误，不打印环境或凭据。
+            # 首个错误及随后七行保留超时后的running tests等上下文，末尾六行保留包结论。
+            # 每行至多160字符、共至多14行，连同转义及固定标题总计小于8KiB，避免泛发堆栈。
+            $firstError = [Collections.Generic.List[string]]::new()
+            $tail = [Collections.Generic.Queue[string]]::new()
+            foreach ($line in [IO.File]::ReadLines($LogPath)) {
+              $excerpt = $line
+              if ($excerpt.Length -gt 160) { $excerpt = $excerpt.Substring(0, 157) + '...' }
+              if ($tail.Count -eq 6) { $null = $tail.Dequeue() }
+              $tail.Enqueue($excerpt)
+              if (($firstError.Count -gt 0 -and $firstError.Count -lt 8) -or
+                  ($firstError.Count -eq 0 -and $line -match '(^panic:|^fatal error:|^--- FAIL:|^FAIL(?:\s|$)|^#\s|:\d+(?::\d+)?:\s)')) {
+                $firstError.Add($excerpt)
+              }
+            }
+            $summary = "$Phase go test exit code $TestExitCode"
+            if ($firstError.Count -gt 0) { $summary += "`n首个错误及上下文：`n" + ($firstError -join "`n") }
+            $summary += "`n末尾（至多六行）：`n" + ($tail -join "`n")
+            $escaped = $summary.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Host "::error title=Windows $Phase go test::$escaped"
+          }
+          # 非零退出由下面显式处理，避免原生命令错误偏好提前打断输出捕获；
+          # Tee只复制stdout/stderr，不改变测试参数，退出码须立即保存，失败不继续desktop。
+          $PSNativeCommandUseErrorActionPreference = $false
+          go test ./cmd/... ./internal/... -count=1 2>&1 | Tee-Object -FilePath $rootTestLog
+          $rootTestExitCode = $LASTEXITCODE
+          if ($rootTestExitCode -ne 0) {
+            try { Write-TestFailureAnnotation 'root' $rootTestLog $rootTestExitCode }
+            catch { Write-Host '::error::无法生成root测试摘要；完整输出见当前步骤日志。' }
+            finally { exit $rootTestExitCode }
+          }
+          go -C desktop test ./... -count=1 2>&1 | Tee-Object -FilePath $desktopTestLog
+          $desktopTestExitCode = $LASTEXITCODE
+          if ($desktopTestExitCode -ne 0) {
+            try { Write-TestFailureAnnotation 'desktop' $desktopTestLog $desktopTestExitCode }
+            catch { Write-Host '::error::无法生成desktop测试摘要；完整输出见当前步骤日志。' }
+            finally { exit $desktopTestExitCode }
+          }
 
   core:
     # 缺任一Linux原生物料或Windows原生测试失败，完整六平台候选不能开始。
