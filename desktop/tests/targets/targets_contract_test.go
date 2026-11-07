@@ -649,11 +649,15 @@ func TestSettingsProductTargetsLanguageProjection(t *testing.T) {
 	}
 	h.request(http.MethodGet, nil)
 	contains(t, h.body, `lang="en"`, `data-i18n="targets.title"`, `id="desktop-catalog"`, `/desktop-i18n.js`, `value="My 中文 draft &lt;screen&gt;"`, "Targets &amp; groups")
+	// 嵌入模板保留检出文件的换行；仅跨行诊断比较统一CRLF/LF，
+	// 避免格式差异遮蔽字段顺序与HTML转义校验。
+	diagnosticBody := strings.ReplaceAll(h.body, "\r\n", "\n")
 	contains(t, h.body,
 		`data-i18n="error.not_found" data-i18n-values="{}">The requested item was not found.</span>`,
 		`data-i18n="error.identity_ambiguous" data-i18n-values="{}">The display identity is ambiguous. Check it manually.</span>`,
 		`data-diagnostic-code="not_found"`, `data-diagnostic-code="identity_ambiguous"`,
-		"message: 人工绑定路径当前缺席，须确认设备并重新绑定", "message: 显示器存在多个兼容候选，须人工绑定",
+		"message: 人工绑定路径当前缺席，须确认设备并重新绑定", "message: 显示器存在多个兼容候选，须人工绑定")
+	contains(t, diagnosticBody,
 		"field: \nretryable: false\ndetail: not_found: 人工绑定路径当前缺席，须确认设备并重新绑定",
 		"field: \nretryable: false\ndetail: identity_ambiguous: 显示器存在多个兼容候选，须人工绑定")
 	if len(f.requests) != before {

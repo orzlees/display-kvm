@@ -297,10 +297,16 @@ func TestSchedulesContract(t *testing.T) {
 		for _, mode := range []string{"readonly", "legacy", "mixed-generation"} {
 			h := openSchedulePage(t, mode, mode != "readonly", false)
 			if mode == "legacy" {
-				for _, detail := range []string{`data-diagnostic-code="unsupported_operation"`, "message: 后台不支持定时编辑 &lt;backend&gt;&amp;", "field: schedules.&lt;status&gt;&amp;\nretryable: true\ndetail: unsupported_operation: 后台不支持定时编辑 &lt;backend&gt;&amp;"} {
+				// 嵌入模板保留检出文件的换行；仅跨行诊断比较统一CRLF/LF，
+				// 避免格式差异遮蔽字段顺序与HTML转义校验。
+				diagnosticBody := strings.ReplaceAll(h.body, "\r\n", "\n")
+				for _, detail := range []string{`data-diagnostic-code="unsupported_operation"`, "message: 后台不支持定时编辑 &lt;backend&gt;&amp;"} {
 					if !strings.Contains(h.body, detail) {
 						t.Fatalf("后台结构化诊断未完整转义保留：%s", detail)
 					}
+				}
+				if detail := "field: schedules.&lt;status&gt;&amp;\nretryable: true\ndetail: unsupported_operation: 后台不支持定时编辑 &lt;backend&gt;&amp;"; !strings.Contains(diagnosticBody, detail) {
+					t.Fatalf("后台结构化诊断未完整转义保留：%s", detail)
 				}
 				if strings.Contains(h.body, "<backend>") || strings.Contains(h.body, "schedules.<status>") {
 					t.Fatal("后台诊断被当作HTML插入")
@@ -326,10 +332,14 @@ func TestSchedulesContract(t *testing.T) {
 				t.Fatalf("%s未显示真实状态解码错误", sample.mode)
 			}
 			if sample.mode == "statuses-duplicate" {
-				for _, detail := range []string{`data-diagnostic-code="internal"`, "message: JSON对象含重复或非法字段", "field: \nretryable: false\ndetail: JSON对象含重复或非法字段"} {
+				diagnosticBody := strings.ReplaceAll(h.body, "\r\n", "\n")
+				for _, detail := range []string{`data-diagnostic-code="internal"`, "message: JSON对象含重复或非法字段"} {
 					if !strings.Contains(h.body, detail) {
 						t.Fatalf("重复字段的原始解码诊断被覆盖：%s", detail)
 					}
+				}
+				if detail := "field: \nretryable: false\ndetail: JSON对象含重复或非法字段"; !strings.Contains(diagnosticBody, detail) {
+					t.Fatalf("重复字段的原始解码诊断被覆盖：%s", detail)
 				}
 				if err := h.service.Language().SetPreference("en"); err != nil {
 					t.Fatal(err)
