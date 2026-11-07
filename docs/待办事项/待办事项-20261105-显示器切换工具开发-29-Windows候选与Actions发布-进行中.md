@@ -5,14 +5,14 @@
 - 项目归属：`/Users/orzlee/work/project/other/displayKvm`，工作名称 displayKvm
 - 总计划：[显示器切换工具开发](../任务计划/【20261105-显示器切换工具开发】.md)
 - 批准设计：[显示器控制与交付缺口补全设计](../superpowers/specs/2026-11-07-display-control-completion-design.md)
-- 对应需求：补全设计 R7；状态：进行中（rc11已实际推送/CI FAIL，两Windows desktop测试失败/root UNKNOWN，下游SKIP、无九档下载；原七tests局部PASS保留，整体未完成）
-- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T22:23:49+08:00（同一24两tests extra1合并局部独验终态，非完成时刻）
+- 对应需求：补全设计 R7；状态：进行中（rc12全部CI job成功，候选预发布、九档真实下载与结构/架构/来源验收通过，软件候选可下载；未签名/未执行包内程序，实机验收待用户，不归档）
+- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T22:55:31+08:00（同轮rc12真实软件验收及下载终态合并，非完成时刻）
 - 实际完成时间：未完成；权威完成字段为本字段，归档时间另记
 - 当前文件位置：`docs/待办事项/待办事项-20261105-显示器切换工具开发-29-Windows候选与Actions发布-进行中.md`
 - 所属系列主会话 ID：`ses_e4cc8a233ffeDDjHm7v7yPI8S3`；文档执行者：`ses_e4ca67d8affe48ddN4S1MR1ZXf`
 - 专属实施子代理会话：`ses_e4c2221a5ffe465gK11LdyFkpr`，既有单workflow extra1已STOP；原独验 `ses_e4bff311bffetgk8CWAyNcrqpC` 当轮A1 scope/A2三变量/A3 finally错误流/A4安全清理static PASS，diff/diffcheck/YAML/结构检查exit0，无本机native PS/Go执行。该历史结论与计数保留，不套作当前24两测试文件extra1通过；本轮29无新实施/验证或workflow写域
 - 执行批次/并行组：补全第2组/共享脚本串行接管28，先于30
-- 本次选中范围：25、26、27、28、29、30及24软件验证部分；rc11实际Git完成但CI FAIL，desktop测试失败/root UNKNOWN、无九档下载。原七tests及其它局部PASS有效；24新两tests extra1实施STOP/局部独验PASS，rc12/native/九档与Windows、Mac实际下载已授权待执行，无rc12 SHA/tagpush/runURL/native PASS/ready。29 STOP，不扩workflow/门控/UI/README，旧两轮/所有extras保留、不自动更多或重启30
+- 本次选中范围：25、26、27、28、29、30及24软件验证部分；rc12真实Git/全部CI job及Windows双架构原生无屏step成功，Release含九归档/九SHA256文件，Windows/Mac桌面及六core真实下载验收通过；原24独验STOP无helper，主证据集中见24。rc11 desktop失败/root UNKNOWN与旧局部PASS保留为历史；29 STOP，不扩workflow/门控/UI/README或重启30，旧两轮/所有extras保留，23/30不归档，用户实机待验
 - 授权依据与停止边界：用户2026-11-07已通过 question 明确批准“按设计实施”；本任务已获准修改workflow与脚本，实现artifact上传和Release发布入口；实现入口不等于已执行发布。本轮不实际推送、触发Actions或创建Release，实际外部执行及下载核对在24软件验证阶段按已有授权和届时明确指令执行。各角色仅执行本编号，不扩到其他任务；终点为真实硬件验收准备，不提交、不新增安装器、不操作硬件。
 - 版本背景：主会话转交分支 `feat/display-control-completion`、基点 `f26ecf2`；文档执行者未执行 Git 核验或改变 Git 状态
 - 历史路径迁移状态：2026-11-07随开工从未完成后缀改为进行中后缀，不覆盖目标并同步链接；01–23归档身份和历史证据不改
@@ -135,7 +135,7 @@ Windows GUI+daemon+CLI配套，amd64/arm64支持程度依据实际证据；增�
 ## rc8真实结果（发布受阻，仅只读定位）
 
 - [run42358339526](https://github.com/orzlees/display-kvm/actions/runs/42358339526)，commit `737c7554dedf262adb098f4c76df9836526ed4fb`、tag `v0.0.1-rc.20261107.8` 已真推，run终态FAIL；Windows amd64 job128361230903、arm64 job128361231127均root Go exit1。有限annotations两类分别为cmd/displaykvmd的完整文档夹具“同步保存目录失败，须核对实际文件”和internal/settings的GOOSlinux Resolver/Windows mode夹具“当前程序没有可执行权限”，完整错误/证据集中见[24 rc8记录](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。底层dir.Sync errno/完整失败清单/desktop执行状态未知，不能跨package误归或把拒旧-config文本当根因。
-- 当前待交付（父转交）：rc11 commit `5ed88c37ee7578098a4d19f9e796715e59b3ea25`/tag `v0.0.1-rc.20261107.11` 已推，[run42376142233](https://github.com/orzlees/display-kvm/actions/runs/42376142233) 终态FAIL；Windows desktop go test exit1、root原生结果UNKNOWN，Linux仅tools生成PASS，core/desktop-windows/desktop-macos-arm64/release全部SKIP，artifacts仅两Linux tools、Release API404 NotFound，无九档/实际下载/SHA/PE/完整许可闭包，未下载或执行程序/硬件。原rc11-local A1–A8/79与187pass事件/Win8compile0及更早证据保留，不当native PASS；24新两tests extra1实施STOP/局部独验PASS（两包race36pass0fail0skip/四compile0，PE未执行），rc12正常commit/tagpush/native/九档及Windows、Mac实际下载已授权待执行，当前无rc12 SHA/tagpush/runURL/native PASS/ready或九包可用证据；准确证据集中见[24当前记录](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。旧自动两轮/所有extras不清零，本轮失败先报告原因方案、不自动新修；29不扩workflow/合同/UI/README/新Mac入口，23/30、24–30进行中不归档，硬件A01–A06未知。四docs必要读回/links后本人逐字段核验身份/范围/token正常释放短锁FREEZE/STOP无待写无helper、父占用保留，不持锁等其它结果，不执行source/tests/build/Git/API或新报告/检查点。
+- 当前软件交付（父转交）：rc12 commit `aa1b3dce24505e04dcb3bbdb3fe032db84e365eb`/tag `v0.0.1-rc.20261107.12` 已推，[run42381983666](https://github.com/orzlees/display-kvm/actions/runs/42381983666) 全部CI job成功，Windows amd64/arm64原生无屏测试step成功；完整joblog不可读，不杜撰测试计数或原输出。[候选Release](https://github.com/orzlees/display-kvm/releases/tag/v0.0.1-rc.20261107.12) draft=false/prerelease=true，共18assets＝九归档＋九SHA256 sidecars；六core、一Mac arm64桌面、两Windows桌面均真实下载，SHA全部OK、ZIP/TAR路径无越界。Windows GUI/daemon/CLI的PE类型架构、Mac App/daemon/CLI/m1ddc/licenses及Mach-O arm64、三个桌面manifest的sourceSHA/target和Linux最终严格门禁/来源许可补证通过，准确主证据/下载名/大小/hash集中见[24当前记录](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。rc11 FAIL/root UNKNOWN与旧局部测试、compile及计数保留为历史，不与rc12成功混淆；未执行任何包内程序、候选未签名，真GUI/首次启动/登录/系统兼容和A01–A06硬件仍待用户，不推断Mac开箱成功。仍23/30、24–30进行中不归档，旧自动两轮/所有extras不清零；29不扩workflow/合同/UI/README/新Mac入口，不自动新修。四docs必要读回/links后本人逐字段核验身份/范围/token正常释放短锁FREEZE/STOP无待写无helper、父占用保留，不持锁等包启动补证，不执行source/tests/build/Git/API或新报告/检查点。
 
 ## 完成、归档与迁移
 

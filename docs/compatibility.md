@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | macOS Apple Silicon | 随包 `m1ddc v1.3.1` 传输，仅限Apple Silicon，使用CoreDisplay私有API；现有桌面本地包构建下限为macOS 13 | 缺具体显示器链路实测；构建下限不是完整支持声明 |
 | macOS Intel | 显示器控制后端当前不适用；桌面构建仍为候选 | 未验证 |
-| Linux amd64/arm64 | 已有ddcutil/busctl/udevadm原生生成与包装校验路径，固定Debian12/glibc2.36生成基线；当前未生成或验收amd64/arm64真实载荷及两架构依赖闭包，不能泛称所有发行版可用 | 未完成这些架构的本机安装运行或硬件验收 |
+| Linux amd64/arm64 | rc12 已生成 ddcutil、busctl、udevadm 随包载荷，通过构建、依赖闭包、来源和许可发布门禁；生成基线为 Debian 12 / glibc 2.36，不能泛称所有发行版或显示器兼容 | 发布包尚未实机运行，未完成这些架构的本机安装运行或硬件验收 |
 | Windows amd64/arm64 | user32/dxva2原生后端可枚举、读取当前输入并按配置切换VCP 0x60，无需外部显示控制工具；启动前置包括设置写锁及IPC私有权限/单实例保护 | 主机七包回归、六份双架构专测编译、六个程序构建及带许可ZIP核验通过；exe均未运行，真实系统及硬件未验证 |
 
 软件定向验证已覆盖标准协议与 LG 特殊提交的边界，Windows 原生 API、AMD 驱动、双架构桌面运行及真实设备仍须最终验证。标准 VCP 支持、AMD 特殊支持和实际链路可用性分别判断。既有原生接入的设计与实施边界见[本轮设计](superpowers/specs/2026-11-07-windows-display-design.md)和[实施计划](superpowers/plans/2026-11-07-windows-display.md)。
@@ -23,7 +23,7 @@ Windows不探测m1ddc/ddcutil/busctl/udevadm，也不清空完整配置文档中
 
 ddcutil保留2.2.7解析基线及3.0.2格式适配；3.0.2的模拟用例依据官方源码格式构造，版本响应、写入回执及底层驱动行为仍需Linux实机确认。macOS Apple Silicon随包工具固定为m1ddc v1.3.1，不自动升级，按UUID选择显示器，LG路径使用input-alt；不能因旧文章中的M4失败记录断言当前路径失败，也不能以新源码或命令契约的静态核对断言实机通过。
 
-Linux宿主仍需I2C驱动/权限及D-Bus/logind/udev设施，不自动安装服务或更改权限。真实载荷尚未生成或验收，构建契约见[Linux随包工具构建契约](development/linux-bundled-tools.md)。
+rc12 已生成 Linux amd64/arm64 的 ddcutil、busctl、udevadm 随包载荷，并通过构建、依赖闭包、来源和许可发布门禁。生成基线为 Debian 12 / glibc 2.36；发布包尚未实机运行，不代表所有发行版或显示器兼容。宿主仍需 I2C 设备权限及 D-Bus/logind/udev 环境，工具不会自动安装服务或修改权限。宿主还需相应 I2C 驱动，构建契约见[Linux随包工具构建契约](development/linux-bundled-tools.md)。
 
 操作系统版本、显示器品牌、接口类型或工具版本本身均不足以证明兼容。USB/扩展坞/转接器等实际链路需要分别记录；不要套用其他型号的输入代码。所有平台在未选中输入时是否仍可控制，由实际显示器与连接决定；用户已有Windows脚本经验不是本项目当前实现的验收证据。
 
@@ -39,6 +39,6 @@ Windows启动前置包括设置文件锁，以及IPC真实SID（用户安全标�
 
 ## 许可与分发
 
-项目核心采用 [MIT](../LICENSE)。Go、Wails 及传递依赖保留各自许可，应按实际构建产物和固定模块核对第三方声明；模块入口见[根 go.mod](../go.mod)与[桌面 go.mod](../desktop/go.mod)。macOS arm64客户端随包提供固定源码编译的m1ddc v1.3.1，保留其MIT许可及来源清单。计划中的Linux工具和随包库须保留各自完整对应源码、构建脚本及许可，真实载荷尚未生成或验收。第三方工具的许可不由项目MIT覆盖。
+项目核心采用 [MIT](../LICENSE)。Go、Wails 及传递依赖保留各自许可，应按实际构建产物和固定模块核对第三方声明；模块入口见[根 go.mod](../go.mod)与[桌面 go.mod](../desktop/go.mod)。macOS arm64客户端随包提供固定源码编译的m1ddc v1.3.1，保留其MIT许可及来源清单。Linux随包工具和随包库须保留各自完整对应源码、构建脚本及许可；rc12 双架构载荷已通过构建、依赖闭包、来源和许可发布门禁，实机运行仍待验证。第三方工具的许可不由项目MIT覆盖。
 
 本地临时签名不代表发布签名、公证或第三方工具再分发授权。

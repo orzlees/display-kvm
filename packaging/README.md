@@ -32,4 +32,4 @@ displaykvm-cli.exe
 
 登录项使用当前用户的 HKCU Run，只管理本应用值。路径或文件身份不符合安全校验时会拒绝设置；请保留原始文件布局。Windows 原生登录行为、驱动、WebView2、睡眠唤醒与真实硬件仍需实机验收；不据此推断系统已具备或会自动安装运行条件。
 
-macOS Intel后端仍不可用；既有macOS arm64 App/归档的交付记录仍有效，原硬件/系统验收仍未完成。Linux未实机测试的限制不代表实际工具载荷已经具备。实际安装、运行、签名和硬件状态以[兼容表](../docs/compatibility.md)及[发布记录](../docs/releases.md)为准。
+macOS Intel后端仍不可用；既有macOS arm64 App/归档的交付记录仍有效，原硬件/系统验收仍未完成。rc12 已生成 Linux amd64/arm64 的 ddcutil、busctl、udevadm 随包载荷，并通过构建、依赖闭包、来源和许可发布门禁。生成基线为 Debian 12 / glibc 2.36；发布包尚未实机运行，不代表所有发行版或显示器兼容。宿主仍需 I2C 设备权限及 D-Bus/logind/udev 环境，工具不会自动安装服务或修改权限。实际安装、运行、签名和硬件状态以[兼容表](../docs/compatibility.md)及[发布记录](../docs/releases.md)为准。

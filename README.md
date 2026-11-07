@@ -1,8 +1,12 @@
 # displayKvm
 
+简体中文 | [English](README.en.md)
+
 displayKvm 用于管理和切换显示器输入源，包含 Go 命令行客户端、本机后台服务和桌面界面。显示器、输入方案、目标、分组、规则和定时任务保存在单一完整设置文件中。
 
 实际控制能力取决于显示器、DDC/CI、驱动和连接链路。构建成功或收到命令回执，不代表显示器画面已经完成切换。
+
+当前候选为 [v0.0.1-rc.20261107.12](https://github.com/orzlees/display-kvm/releases/tag/v0.0.1-rc.20261107.12)，[构建与发布流程](https://github.com/orzlees/display-kvm/actions/runs/42381983666)已通过。发布包含九份归档及九份对应 SHA-256 校验文件；这是未签名预发布候选，未提供受信任的分发签名（macOS 使用 ad-hoc 签名且未公证）。软件构建、CI、归档下载及校验已通过；发布包内程序尚未实机运行，真实显示器、USB、登录和睡眠唤醒行为仍待验证。
 
 ## 组成
 
@@ -68,11 +72,11 @@ desktop/bin/DisplayKvm.app/Contents/MacOS/displaykvm
 | macOS Apple Silicon | 提供 arm64 桌面候选，随包使用固定版本 `m1ddc v1.3.1`；本地桌面构建最低部署版本为 macOS 13。 |
 | macOS Intel | 显示器控制后端尚不可用。 |
 | Windows amd64 / arm64 | 使用系统原生显示器接口，无需另装显示器控制工具；已有核心及桌面交叉编译候选，最低候选基线为 Windows 10 1803（build 17134）。 |
-| Linux amd64 / arm64 | 原生生成与包装校验路径已有；双架构真实随包工具、依赖及许可载荷仍待生成和验收。 |
+| Linux amd64 / arm64 | rc12 已生成 ddcutil、busctl、udevadm 双架构随包载荷，通过构建、依赖闭包、来源和许可发布门禁；基线为 Debian 12 / glibc 2.36，发布包尚未实机运行，发行版及显示器兼容性仍待验证。 |
 
 Windows 已实现标准 VCP 输入控制和当前用户登录启动。LG 特殊输入提交使用当前用户已安装的 AMD 驱动，当前仅 Windows amd64 支持这条特殊路径；它使用源地址 0x50 和私有命令 0xF4，不能替换为标准 VCP 0x60。驱动缺失、目标映射不唯一或身份校验失败时拒绝发送。Windows arm64 的标准路径与桌面候选保留，不能据此推断支持 AMD 特殊路径。
 
-macOS Apple Silicon 复用随包 m1ddc v1.3.1，按显示器 UUID 发送 input 或 input-alt，输入值使用十进制。Linux 候选要求原生生成的 ddcutil 3.0.2、systemd 258 相关工具、依赖库、完整源码和许可证；缺少任一架构载荷时，不得作为完整跨平台候选发布。
+macOS Apple Silicon 复用随包 m1ddc v1.3.1，按显示器 UUID 发送 input 或 input-alt，输入值使用十进制。rc12 已生成 Linux amd64/arm64 的 ddcutil、busctl、udevadm 随包载荷，并通过构建、依赖闭包、来源和许可发布门禁。生成基线为 Debian 12 / glibc 2.36；发布包尚未实机运行，不代表所有发行版或显示器兼容。宿主仍需 I2C 设备权限及 D-Bus/logind/udev 环境，工具不会自动安装服务或修改权限。Linux 候选要求原生生成的 ddcutil 3.0.2、systemd 258 相关工具、依赖库、完整源码和许可证；缺少任一架构载荷时，不得作为完整跨平台候选发布。
 
 Windows 仍依赖显示器开启 DDC/CI、线缆、扩展坞等链路及驱动允许访问，以及相关本地文件系统能力。WebView2、安装、权限、登录启动和显示器切换等尚未完成 Windows 实机验收。代码和定向测试通过不等于 Windows 原生运行或真实切屏通过；实际完成状态以[任务计划](docs/任务计划/【20261105-显示器切换工具开发】.md)和本轮验证证据为准。
 

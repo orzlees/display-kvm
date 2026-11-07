@@ -58,7 +58,7 @@ macOS写者会在配置旁创建私有隐藏目录 `.displaykvm-settings-locks`�
 
 ## 启动后台和连接
 
-macOS arm64客户端自动使用随包m1ddc，不搜索PATH。源码启动如需工具覆盖，使用上文的高级 `config set-tool` 命令。Linux随包ddcutil/busctl/udevadm尚缺真实载荷及验收，当前Linux客户端未完成，见[兼容表](../compatibility.md)。
+macOS arm64客户端自动使用随包m1ddc，不搜索PATH。源码启动如需工具覆盖，使用上文的高级 `config set-tool` 命令。rc12 已生成 Linux amd64/arm64 的 ddcutil、busctl、udevadm 随包载荷，并通过构建、依赖闭包、来源和许可发布门禁。生成基线为 Debian 12 / glibc 2.36；发布包尚未实机运行，不代表所有发行版或显示器兼容。宿主仍需 I2C 设备权限及 D-Bus/logind/udev 环境，工具不会自动安装服务或修改权限。见[兼容表](../compatibility.md)。
 
 ```sh
 go run ./cmd/displaykvm config check --file /absolute/settings.json
@@ -83,7 +83,7 @@ Windows桌面当前不会自动启动相邻后台或CLI。先在PowerShell中手
 
 桌面通过系统用户配置目录（`os.UserConfigDir`）发现后台的本机连接端点，双方须使用同一用户及配置环境；程序无需放在同一目录。Windows文件名大小写不敏感，桌面与CLI不能仅靠大小写区分后放在同一目录，推荐布局见[便携包装](../../packaging/README.md)。
 
-Windows启动会核验设置写锁、用户私有运行目录和单实例锁；已有权限过宽、所有者不匹配、重解析路径或无法核验的路径会被拒绝，不自动修改用户已有权限。Windows登录项管理仍未实现；手动启动后台和桌面.exe不等于完整安装包，WebView2及Windows桌面真实运行尚未验证。
+Windows启动会核验设置写锁、用户私有运行目录和单实例锁；已有权限过宽、所有者不匹配、重解析路径或无法核验的路径会被拒绝，不自动修改用户已有权限。Windows 已实现当前用户登录后启动，后台与桌面登录项须分别配置；它不是登录前系统服务，桌面也不会自动启动后台。发布包的实际登录、系统和硬件行为仍待实机验证。手动启动后台和桌面.exe不等于完整安装包，WebView2及Windows桌面真实运行尚未验证。
 
 规则和日程从同一完整配置文件加载，不使用时保留空列表。后台不自动安装为系统服务，也不自动启动桌面程序。桌面和 CLI 应使用同一用户连接后台。
 
@@ -118,7 +118,7 @@ go run ./cmd/displaykvm calibrate query --commit COMMIT_ID
 
 ## macOS登录启动与桌面驻留
 
-服务和桌面是两个独立的当前用户 LaunchAgent（登录任务），首次均关闭，只在该用户登录后运行。它们不提供未登录时的系统服务；其它平台的登录启动能力明确返回 `unsupported`（不支持）。
+服务和桌面是两个独立的当前用户 LaunchAgent（登录任务），首次均关闭，只在该用户登录后运行。它们不提供未登录时的系统服务。Windows 已实现当前用户登录后启动，后台与桌面登录项须分别配置；它不是登录前系统服务。各平台的前置条件与验证边界见[兼容性说明](../compatibility.md)。
 
 | 开机启动服务 | 开机启动桌面客户端 | 下次登录的安排 |
 | --- | --- | --- |
