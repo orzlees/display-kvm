@@ -85,7 +85,7 @@ sh packaging/package.sh core --run-id core-001
 
 最终客户端的daemon和CLI所在工具目录应与ddcutil、busctl、udevadm相邻；非基线共享库放相邻lib，采用受控相对RUNPATH，不写入构建机绝对路径。运行时通过统一controltools.Resolver按真实程序位置定位，不搜索用户PATH，也不要求终端用户自行下载工具。
 
-在受信任的本地构建产物上用readelf核架构、动态依赖和RUNPATH，ldd核依赖闭包；除约定的系统加载器/glibc外，依赖均须从包内解析。glibc符号需求不得高于最终声明基线。任何缺依赖、错误架构、构建机绝对路径、缺源码或缺许可均不能产出可分发包。每份工具与随包库均记录实际SHA-256、版本、来源、完整对应源码和构建脚本。
+在受信任的本地构建产物上用readelf核架构、动态依赖和RUNPATH，ldd核依赖闭包；除约定的系统加载器/glibc外，依赖均须从包内解析。glibc符号需求不得高于最终声明基线。任何缺依赖、错误架构、构建机绝对路径、缺源码或缺许可均不能产出可分发包。每份工具与随包库均记录实际SHA-256、版本、来源、完整对应源码和构建脚本。程序必须恰有一个PT_INTERP；在来源、原始摘要及目标架构已核验的ET_DYN共享库中，允许没有PT_INTERP或恰有一个正确加载器。amd64仅接受 `/lib64/ld-linux-x86-64.so.2`，arm64仅接受 `/lib/ld-linux-aarch64.so.1`；空段、重复段、未知路径和错误架构的加载器均拒绝。共享库可以借此提供直接执行入口，仍可按SONAME供动态链接，不能单凭PT_INTERP把它认定为误收的程序。生成器与独立包装校验采用相同规则，不删除该段或针对单个库放行。
 
 运行基线只豁免 `libc.so.6 libm.so.6 libdl.so.2 libpthread.so.0 librt.so.1 libresolv.so.2 libutil.so.1`，以及架构约定的系统加载器；其他传递依赖均复制为无链接的 `lib/<SONAME>`，实际ELF的唯一SONAME必须与文件名及依赖映射一致。工具RUNPATH必须为 `$ORIGIN/lib`，每个库为 `$ORIGIN`；不接受旧RPATH、绝对依赖、额外系统回退路径或高于GLIBC_2.36的符号。库经patchelf修改前后的摘要都记录；Debian库原字节须存在于所下载精确.deb内。glibc和加载器由宿主提供，不随包混装。
 

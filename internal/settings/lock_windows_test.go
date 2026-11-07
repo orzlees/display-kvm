@@ -45,6 +45,150 @@ func windowsExpectCode(t *testing.T, err error, code model.ErrorCode) {
 	}
 }
 
+func TestWindowsSettingsOwnerPoliciesSeparateConfigDirectoryAndPrivateLocks(t *testing.T) {
+	// SID仅作为所有者策略的输入，不切换令牌或给临时对象伪造系统所有者。
+	// TrustedInstaller只在更高祖先的既有集合中受信，不能借ConfigDir放宽而进入私有层。
+	const current = "S-1-5-21-111-222-333-1001"
+	for _, test := range []struct {
+		name      string
+		owner     string
+		private   bool
+		configDir bool
+		ancestor  bool
+	}{
+		{name: "current-user", owner: current, private: true, configDir: true, ancestor: true},
+		{name: "system", owner: "S-1-5-18", configDir: true, ancestor: true},
+		{name: "administrators", owner: "S-1-5-32-544", configDir: true, ancestor: true},
+		{name: "trusted-installer", owner: "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464", ancestor: true},
+		{name: "another-user", owner: "S-1-5-21-111-222-333-1002"},
+		{name: "arbitrary-default-owner", owner: "S-1-5-21-111-222-333-513"},
+		{name: "everyone", owner: "S-1-1-0"},
+		{name: "authenticated-users", owner: "S-1-5-11"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, policy := range []struct {
+				name      string
+				private   bool
+				configDir bool
+				allowed   bool
+			}{
+				{name: "private-lock", private: true, allowed: test.private},
+				{name: "config-directory", configDir: true, allowed: test.configDir},
+				{name: "higher-ancestor", allowed: test.ancestor},
+			} {
+				t.Run(policy.name, func(t *testing.T) {
+					if allowed := windowsSettingsOwnerAllowed(test.owner, current, policy.private, policy.configDir); allowed != policy.allowed {
+						t.Fatalf("所有者%s在%s的准入错误: got=%t want=%t", test.owner, policy.name, allowed, policy.allowed)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestWindowsSettingsExistingConfigDirectoryDefaultOwnerKeepsLockLifecycle(t *testing.T) {
+	store, root := windowsLockFixture(t)
+	sid, err := windowsSettingsSID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 只继承受控父目录的DACL，不指定或修改owner。提升令牌创建的子目录可能
+	// 属于Administrators而非TokenUser；必须观察真实owner，不能靠修改父owner伪造覆盖。
+	if err := os.Mkdir(store.environment.ConfigDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	readOwner := func(file *os.File) string {
+		t.Helper()
+		proc, err := windowsSettingsProc("GetSecurityInfo")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var owner *syscall.SID
+		var descriptor unsafe.Pointer
+		status, _, _ := proc.Call(file.Fd(), 1, 0x1, uintptr(unsafe.Pointer(&owner)), 0, 0, 0, uintptr(unsafe.Pointer(&descriptor)))
+		if descriptor != nil {
+			defer func() {
+				if _, err := syscall.LocalFree(syscall.Handle(uintptr(descriptor))); err != nil {
+					t.Error(err)
+				}
+			}()
+		}
+		if status != 0 {
+			t.Fatal(windowsSettingsFailure("GetSecurityInfo(测试所有者)", syscall.Errno(status)))
+		}
+		if owner == nil || descriptor == nil {
+			t.Fatal("临时对象未返回可核验的所有者")
+		}
+		if err := windowsSettingsBool("IsValidSid", uintptr(unsafe.Pointer(owner))); err != nil {
+			t.Fatal(err)
+		}
+		actual, err := owner.String()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return actual
+	}
+	directory, err := openWindowsSettingsDirectory(store.environment.ConfigDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer directory.Close()
+	owner := readOwner(directory)
+	t.Logf("ConfigDir实际默认所有者=%s 当前用户=%s", owner, sid)
+	if owner != sid && owner != "S-1-5-18" && owner != "S-1-5-32-544" {
+		t.Fatalf("默认所有者不在ConfigDir允许的固定主体内: %s", owner)
+	}
+	if err := checkWindowsSettingsACL(directory, sid, false, true); err != nil {
+		t.Fatalf("安全的现有ConfigDir应通过访问控制核验: %v", err)
+	}
+	if owner != sid {
+		// 原生提升令牌分支还需证明同一真实对象不能冒充当前用户的私有目录。
+		windowsExpectCode(t, checkWindowsSettingsACL(directory, sid, true, false), model.CodePermissionDenied)
+	}
+	path := filepath.Join(root, "settings.json")
+	writer, err := store.OpenWriter(context.Background(), path)
+	if err != nil {
+		t.Fatalf("默认所有者ConfigDir下应能取得真实写锁: %v", err)
+	}
+	defer writer.Close()
+	privateObjects := []*os.File{writer.lock}
+	for _, path := range []string{filepath.Dir(writer.lock.Name()), filepath.Dir(filepath.Dir(writer.lock.Name()))} {
+		file, err := openWindowsSettingsDirectory(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+		privateObjects = append(privateObjects, file)
+	}
+	for _, file := range privateObjects {
+		if owner := readOwner(file); owner != sid {
+			t.Fatalf("私有锁对象必须仍由当前用户所有: %s owner=%s", file.Name(), owner)
+		}
+		if err := checkWindowsSettingsACL(file, sid, true, false); err != nil {
+			t.Fatal(err)
+		}
+		// 仅替换检查输入的current SID，证明真实锁文件和两级私有目录仍拒绝异主；
+		// 这不代表切换了运行令牌，也不修改对象的实际owner或DACL。
+		windowsExpectCode(t, checkWindowsSettingsACL(file, "S-1-1-0", true, false), model.CodePermissionDenied)
+	}
+	other, conflict := store.OpenWriter(context.Background(), path)
+	if other != nil {
+		other.Close()
+		t.Fatal("默认所有者ConfigDir下不得同时取得第二写锁")
+	}
+	windowsExpectCode(t, conflict, model.CodeInvalidRequest)
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := store.OpenWriter(context.Background(), path)
+	if err != nil {
+		t.Fatalf("关闭后应能重新取得同一路径写锁: %v", err)
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWindowsSettingsWritersExcludeAliasesReleaseAndKeepOtherTargetsIndependent(t *testing.T) {
 	store, root := windowsLockFixture(t)
 	path := filepath.Join(root, "settings.json")

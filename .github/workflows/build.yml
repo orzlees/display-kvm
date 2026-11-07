@@ -294,15 +294,17 @@ jobs:
                 $ownerMatchesDefaultOwner = 'false'
                 if ($actualOwnerSid.Value -eq $tokenOwnerSid.Value) { $ownerMatchesDefaultOwner = 'true' }
               }
-              # SYSTEM与Administrators的固定SID仅用于诊断分类，不扩展任何目录准入规则。
+              # 普通测试基目录与ConfigDir的owner策略一致，仅允许当前User或固定SYSTEM/Administrators。
+              # TokenOwner仅用于诊断，不能作为信任来源；私有锁目录/文件仍由原测试严格核验User所有权。
+              # GUID根边界已在上方检查，普通祖先的DACL等完整安全策略仍由实际生产入口测试校验。
               if ($ownerCategory -eq 'other' -and $null -ne $actualOwnerSid -and
                   @('S-1-5-18', 'S-1-5-32-544') -contains $actualOwnerSid.Value) {
                 $ownerCategory = 'fixed-trusted-group'
               }
               Write-Host "Windows preflight owner_matches_user=$ownerMatchesUser owner_matches_default_owner=$ownerMatchesDefaultOwner owner_category=$ownerCategory"
-              if ($actualOwnerSid.Value -ne $currentUserSid.Value) {
+              if (@('current-user', 'fixed-trusted-group') -notcontains $ownerCategory) {
                 $stepReason = 'owner-mismatch'
-                throw '测试临时根目录必须由当前令牌账户所有'
+                throw '测试临时根目录所有者必须是当前账户、SYSTEM或Administrators'
               }
               $env:TEMP = $testTempRoot
               $env:TMP = $testTempRoot
@@ -359,11 +361,13 @@ jobs:
               if ($testsSucceeded -and $testTempCreated -and -not $restoreFailed) {
                 try {
                   $testTempDirectory = Get-Item -LiteralPath $testTempRoot -Force
+                  # 清理时owner必须仍等于本次已准入的User或固定可信owner快照；
+                  # 不能仅复用旧分类，也不能因等于TokenOwner就信任后来变更的owner。
                   if (-not $testTempDirectory.PSIsContainer -or
                       ($testTempDirectory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
                       -not [string]::Equals($testTempDirectory.FullName, $testTempRoot, [StringComparison]::OrdinalIgnoreCase) -or
                       -not [string]::Equals($testTempDirectory.Parent.FullName, $localAppData, [StringComparison]::OrdinalIgnoreCase) -or
-                      (Get-Acl -LiteralPath $testTempRoot).GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $currentUserSid.Value) {
+                      (Get-Acl -LiteralPath $testTempRoot).GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $actualOwnerSid.Value) {
                     throw '本次临时根目录身份已改变，保留目录'
                   }
                   # 仅删除本次拥有的空根目录，不递归、不跟随链接，也不清理LocalAppData父目录。

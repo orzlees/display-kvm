@@ -13,7 +13,7 @@ import (
 
 // 构造最小ELF用于检查包装边界，不执行它，也不把测试字节当作真实Linux载荷。
 // 三个动态节分别保存依赖字符串、动态表和空符号表，覆盖实际ELF读取路径。
-func linuxTestELF(machine elf.Machine, needed []string, runpath, interpreter string, sonames ...string) []byte {
+func linuxTestELF(machine elf.Machine, needed []string, runpath string, interpreters []string, sonames ...string) []byte {
 	strtab := []byte{0}
 	var dynamic bytes.Buffer
 	for _, name := range append(append([]string{}, needed...), runpath) {
@@ -33,23 +33,31 @@ func linuxTestELF(machine elf.Machine, needed []string, runpath, interpreter str
 		strtab = append(strtab, append([]byte(name), 0)...)
 	}
 	dynamic.Write(make([]byte, 16))
-	const dataStart = 64 + 56
+	// 按实际数量写入PT_INTERP；没有段与含空字符串的段不同，后者不能冒充无加载器的共享库。
+	var interpreterData bytes.Buffer
+	for _, interpreter := range interpreters {
+		interpreterData.WriteString(interpreter + "\x00")
+	}
+	dataStart := 64 + 56*len(interpreters)
 	dynOffset := dataStart + len(strtab)
 	symOffset := dynOffset + dynamic.Len()
 	interpOffset := symOffset + 24
-	sectionOffset := interpOffset + len(interpreter) + 1
-	header := elf.Header64{Type: uint16(elf.ET_DYN), Machine: uint16(machine), Version: 1, Ehsize: 64, Phoff: 64, Phentsize: 56, Phnum: 1, Shoff: uint64(sectionOffset), Shentsize: 64, Shnum: 4}
+	sectionOffset := interpOffset + interpreterData.Len()
+	header := elf.Header64{Type: uint16(elf.ET_DYN), Machine: uint16(machine), Version: 1, Ehsize: 64, Phoff: 64, Phentsize: 56, Phnum: uint16(len(interpreters)), Shoff: uint64(sectionOffset), Shentsize: 64, Shnum: 4}
 	copy(header.Ident[:], []byte{0x7f, 'E', 'L', 'F', byte(elf.ELFCLASS64), byte(elf.ELFDATA2LSB), 1})
 	var out bytes.Buffer
 	binary.Write(&out, binary.LittleEndian, header)
-	binary.Write(&out, binary.LittleEndian, elf.Prog64{Type: uint32(elf.PT_INTERP), Off: uint64(interpOffset), Filesz: uint64(len(interpreter) + 1)})
+	for _, interpreter := range interpreters {
+		binary.Write(&out, binary.LittleEndian, elf.Prog64{Type: uint32(elf.PT_INTERP), Off: uint64(interpOffset), Filesz: uint64(len(interpreter) + 1)})
+		interpOffset += len(interpreter) + 1
+	}
 	out.Write(strtab)
 	out.Write(dynamic.Bytes())
 	out.Write(make([]byte, 24))
-	out.WriteString(interpreter + "\x00")
+	out.Write(interpreterData.Bytes())
 	for _, section := range []elf.Section64{
 		{},
-		{Type: uint32(elf.SHT_STRTAB), Off: dataStart, Size: uint64(len(strtab)), Addralign: 1},
+		{Type: uint32(elf.SHT_STRTAB), Off: uint64(dataStart), Size: uint64(len(strtab)), Addralign: 1},
 		{Type: uint32(elf.SHT_DYNAMIC), Off: uint64(dynOffset), Size: uint64(dynamic.Len()), Link: 1, Entsize: 16, Addralign: 8},
 		{Type: uint32(elf.SHT_DYNSYM), Off: uint64(symOffset), Size: 24, Link: 1, Entsize: 24, Addralign: 8},
 	} {
@@ -67,11 +75,11 @@ func TestLinuxELFRejectsWrongMachineAndMissingClosure(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write(linuxTestELF(elf.EM_AARCH64, []string{"libc.so.6"}, "$ORIGIN/lib", "/lib/ld-linux-aarch64.so.1"))
+	write(linuxTestELF(elf.EM_AARCH64, []string{"libc.so.6"}, "$ORIGIN/lib", []string{"/lib/ld-linux-aarch64.so.1"}))
 	if _, err := inspectLinuxELF(path, "amd64", true); err == nil {
 		t.Fatal("错误架构必须拒绝")
 	}
-	write(linuxTestELF(elf.EM_X86_64, []string{"libc.so.6", "libmissing.so.1"}, "$ORIGIN/lib", "/lib64/ld-linux-x86-64.so.2"))
+	write(linuxTestELF(elf.EM_X86_64, []string{"libc.so.6", "libmissing.so.1"}, "$ORIGIN/lib", []string{"/lib64/ld-linux-x86-64.so.2"}))
 	deps, err := inspectLinuxELF(path, "amd64", true)
 	if err != nil {
 		t.Fatal(err)
@@ -94,11 +102,66 @@ func TestLinuxELFRejectsHostPathsAndNewerGLIBC(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(noticeTempDir(t), "tool")
-			if err := os.WriteFile(path, linuxTestELF(elf.EM_X86_64, []string{tc.dependency}, tc.runpath, tc.interpreter), 0755); err != nil {
+			if err := os.WriteFile(path, linuxTestELF(elf.EM_X86_64, []string{tc.dependency}, tc.runpath, []string{tc.interpreter}), 0755); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := inspectLinuxELF(path, "amd64", true); err == nil {
 				t.Fatal("构建机路径、未知加载器及超出基线的符号必须拒绝")
+			}
+		})
+	}
+}
+
+func TestLinuxELFInterpreterPolicy(t *testing.T) {
+	for _, target := range []struct {
+		arch, loader, otherLoader string
+		machine                   elf.Machine
+	}{
+		{"amd64", "/lib64/ld-linux-x86-64.so.2", "/lib/ld-linux-aarch64.so.1", elf.EM_X86_64},
+		{"arm64", "/lib/ld-linux-aarch64.so.1", "/lib64/ld-linux-x86-64.so.2", elf.EM_AARCH64},
+	} {
+		t.Run(target.arch, func(t *testing.T) {
+			// 可直接执行的共享库允许一个本架构加载器，但仍是ET_DYN、正确SONAME和相对RUNPATH；
+			// 空段或重复段不能按“没有解释器”处理，程序也不能借共享库规则省略加载器。
+			for _, tc := range []struct {
+				name         string
+				program      bool
+				interpreters []string
+				valid        bool
+			}{
+				{"shared-no-interp", false, nil, true},
+				{"shared-native-interp", false, []string{target.loader}, true},
+				{"shared-foreign-interp", false, []string{target.otherLoader}, false},
+				{"shared-unknown-interp", false, []string{"/private/loader"}, false},
+				{"shared-multiple-interps", false, []string{target.loader, target.loader}, false},
+				{"shared-empty-interp", false, []string{""}, false},
+				{"shared-empty-then-native", false, []string{"", target.loader}, false},
+				{"program-native-interp", true, []string{target.loader}, true},
+				{"program-foreign-interp", true, []string{target.otherLoader}, false},
+				{"program-unknown-interp", true, []string{"/private/loader"}, false},
+				{"program-no-interp", true, nil, false},
+				{"program-multiple-interps", true, []string{target.loader, target.loader}, false},
+				{"program-empty-interp", true, []string{""}, false},
+				{"program-empty-then-native", true, []string{"", target.loader}, false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					name, runpath := "libinterpreter-test.so.1", "$ORIGIN"
+					var sonames []string
+					if tc.program {
+						name, runpath = "tool", "$ORIGIN/lib"
+					} else {
+						sonames = []string{name}
+					}
+					file := filepath.Join(noticeTempDir(t), name)
+					data := linuxTestELF(target.machine, []string{"libc.so.6"}, runpath, tc.interpreters, sonames...)
+					if err := os.WriteFile(file, data, 0755); err != nil {
+						t.Fatal(err)
+					}
+					_, err := inspectLinuxELF(file, target.arch, tc.program)
+					if (err == nil) != tc.valid {
+						t.Fatalf("ELF解释器数量及目标架构校验不符：%v", err)
+					}
+				})
 			}
 		})
 	}
@@ -286,7 +349,7 @@ func TestLinuxLibrarySONAMEMatchesPayloadName(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			file := filepath.Join(noticeTempDir(t), "libprivate-test.so.258")
-			data := linuxTestELF(elf.EM_X86_64, []string{"libc.so.6"}, "$ORIGIN", "", tc.sonames...)
+			data := linuxTestELF(elf.EM_X86_64, []string{"libc.so.6"}, "$ORIGIN", nil, tc.sonames...)
 			if err := os.WriteFile(file, data, 0755); err != nil {
 				t.Fatal(err)
 			}

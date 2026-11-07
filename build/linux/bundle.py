@@ -421,8 +421,12 @@ def check_elf(binary, arch, program, work, log, context=None):
     if "GLIBC_PRIVATE" in versions or any(tuple(map(int, value.split("."))) > (2, 36) for value in re.findall(r"GLIBC_([0-9]+\.[0-9]+(?:\.[0-9]+)?)", versions)):
         fail("ELF需要超过glibc2.36的符号")
     headers = command(["readelf", "-lW", binary], work, log)
-    interpreters = re.findall(r"Requesting program interpreter: ([^\]]+)", headers)
-    if interpreters != ([LOADERS[arch]] if program else []):
+    interpreters = re.findall(r"Requesting program interpreter: ([^\]]*)", headers)
+    # 库的来源与原始字节先由收集器核验，目标架构及ET_DYN仍受上方约束；
+    # 共享库可通过PT_INTERP提供直接执行入口，不能仅因含此段就当作误收的程序。
+    # 只允许无解释器或唯一的本架构加载器；程序仍必须恰有一个，多段、空段及未知路径均拒绝。
+    expected_interpreters = [[LOADERS[arch]]] if program else [[], [LOADERS[arch]]]
+    if interpreters not in expected_interpreters:
         # 此处是readelf成功后的策略校验，没有失败子进程日志；诊断须保留对象及来源，
         # 才能区分具体共享库的PT_INTERP内容，不能据此推断它必然是误收的可执行程序。
         context = context or {}
@@ -452,7 +456,7 @@ def check_elf(binary, arch, program, work, log, context=None):
             actual.append(value[:256])
         details.update(arch=arch, elf_type=int.from_bytes(header[16:18], "little"),
                        actual_interpreters=actual, interpreter_count=len(interpreters),
-                       expected_interpreters=[LOADERS[arch]] if program else [])
+                       expected_interpreters=expected_interpreters)
         fail("ELF加载器不符\n" + "\n".join(key + ": " + json.dumps(value, ensure_ascii=False)
                                           for key, value in details.items()))
 

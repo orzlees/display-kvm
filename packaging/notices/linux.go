@@ -160,17 +160,21 @@ func inspectLinuxELF(name, arch string, program bool) ([]string, error) {
 			return nil, errors.New("Linux共享库SONAME必须与随包文件名唯一匹配")
 		}
 	}
-	interp := ""
+	// linuxBundle已先核验库来源、原始及最终摘要；ET_DYN共享库可以带直接执行入口，
+	// 因而允许没有PT_INTERP或唯一的本架构加载器，不能一概当成误收的程序。
+	// 段数单独计数，避免空段后接合法段时被覆盖；程序仍必须恰有一个正确加载器。
+	interp, interpCount := "", 0
 	for _, segment := range image.Progs {
 		if segment.Type == elf.PT_INTERP {
+			interpCount++
 			data, err := io.ReadAll(io.LimitReader(segment.Open(), 4096))
-			if err != nil || interp != "" {
+			if err != nil || interpCount > 1 {
 				return nil, errors.New("ELF加载器字段无效")
 			}
 			interp = strings.TrimSuffix(string(data), "\x00")
 		}
 	}
-	if program && interp != loader || !program && interp != "" {
+	if program && interpCount != 1 || interpCount != 0 && interp != loader {
 		return nil, errors.New("ELF加载器不符合目标基线")
 	}
 	// Debian12/glibc2.36是本配方唯一构建边界；较新runner不能通过改清单隐藏ABI抬升。

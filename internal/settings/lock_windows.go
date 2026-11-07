@@ -216,7 +216,20 @@ func windowsSettingsTrustedSID(sid, current string) bool {
 	return sid == current || sid == "S-1-5-18" || sid == "S-1-5-32-544" || sid == "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464"
 }
 
-func checkWindowsSettingsACL(file *os.File, sid string, private, currentOwner bool) (result error) {
+func windowsSettingsOwnerAllowed(owner, current string, private, configDirectory bool) bool {
+	// 私有锁对象必须属于当前用户；ConfigDir是可由提升令牌创建的既有基目录，
+	// 默认owner可能为SYSTEM或Administrators，接受这两个固定主体仍须完整核验DACL和路径。
+	// ConfigDir不复用更高祖先的完整集合，以免连带允许TrustedInstaller或任意令牌默认owner。
+	if private {
+		return owner == current
+	}
+	if configDirectory {
+		return owner == current || owner == "S-1-5-18" || owner == "S-1-5-32-544"
+	}
+	return windowsSettingsTrustedSID(owner, current)
+}
+
+func checkWindowsSettingsACL(file *os.File, sid string, private, configDirectory bool) (result error) {
 	proc, err := windowsSettingsProc("GetSecurityInfo")
 	if err != nil {
 		return err
@@ -241,7 +254,7 @@ func checkWindowsSettingsACL(file *os.File, sid string, private, currentOwner bo
 	if err != nil {
 		return err
 	}
-	if currentOwner && ownerSID != sid || !windowsSettingsTrustedSID(ownerSID, sid) {
+	if !windowsSettingsOwnerAllowed(ownerSID, sid, private, configDirectory) {
 		return fmt.Errorf("%w\nowner=%s\ncurrentSID=%s", model.NewError(model.CodePermissionDenied, "配置锁路径所有者不安全", nil), ownerSID, sid)
 	}
 	// ACL头固定8字节，ACE由系统GetAce返回并受AclSize约束；不接受无法解释的
@@ -363,10 +376,10 @@ func pinWindowsSettingsDirectories(path, sid string, create bool) (files []*os.F
 		if _, err := windowsSettingsHandleInfo(file, true); err != nil {
 			return files, err
 		}
-		if err := checkWindowsSettingsACL(file, sid, index < 2, index < 3); err != nil {
+		if err := checkWindowsSettingsACL(file, sid, index < 2, index == 2); err != nil {
 			// 仅在拒绝时追加目录和模式，区分ConfigDir与更高祖先；层级从settings-locks=0向上递增。
-			// 原私有/所有者判定保持不变，错误链保留原分类；原因在前、字段分行，便于截断采集诊断。
-			return files, fmt.Errorf("%w\n目录层级=%d private=%t currentOwner=%t\n目录=%q", err, index, index < 2, index < 3, directory)
+			// 按实际分层模式记录检查条件，错误链保留原分类；原因在前、字段分行，便于截断采集诊断。
+			return files, fmt.Errorf("%w\n目录层级=%d private=%t currentOwner=%t configDirectory=%t\n目录=%q", err, index, index < 2, index < 2, index == 2, directory)
 		}
 		opened, err := file.Stat()
 		if err != nil {
@@ -625,7 +638,7 @@ func checkSettingsLock(file *os.File) (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, closeWindowsSettingsDirectories(directories)) }()
-	if err := checkWindowsSettingsACL(file, sid, true, true); err != nil {
+	if err := checkWindowsSettingsACL(file, sid, true, false); err != nil {
 		return err
 	}
 	current, err := os.Lstat(file.Name())
