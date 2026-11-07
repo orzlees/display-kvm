@@ -5,6 +5,8 @@ package settings
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"os/exec"
@@ -241,9 +243,25 @@ func TestWindowsSettingsPathLockSurvivesAtomicReplacement(t *testing.T) {
 	if err := Encode(&original, NewDocument()); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, original.Bytes(), 0600); err != nil {
+	writer, err := store.OpenWriter(context.Background(), path)
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer writer.Close()
+	result, saveErr := writer.Save(context.Background(), NewDocument(), "")
+	first := unifiedSaved(t, result, saveErr)
+	originalDigest := sha256.Sum256(original.Bytes())
+	if data, err := os.ReadFile(path); err != nil || !bytes.Equal(data, original.Bytes()) || first.Revision != Revision(hex.EncodeToString(originalDigest[:])) {
+		t.Fatalf("首次创建必须读回完整新内容和准确版本: %q %v", data, err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	writer, err = store.OpenWriter(context.Background(), path)
+	if err != nil {
+		t.Fatalf("保存并关闭后必须能够重新取得写锁: %v", err)
+	}
+	defer writer.Close()
 	beforeFile, err := openManaged(path)
 	if err != nil {
 		t.Fatal(err)
@@ -254,19 +272,24 @@ func TestWindowsSettingsPathLockSurvivesAtomicReplacement(t *testing.T) {
 	if err := errors.Join(statErr, beforeFile.Close()); err != nil {
 		t.Fatal(err)
 	}
-	writer, err := store.OpenWriter(context.Background(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer writer.Close()
 	snapshot, err := writer.Read()
-	if err != nil {
+	if err != nil || snapshot.Revision != first.Revision {
+		t.Fatalf("重开后必须读取同一保存版本: %+v %v", snapshot, err)
+	}
+	doc := snapshot.Document
+	doc.Desktop.Language = "zh-CN"
+	var replacement bytes.Buffer
+	if err := Encode(&replacement, doc); err != nil {
 		t.Fatal(err)
 	}
-	result, saveErr := writer.Save(context.Background(), snapshot.Document, snapshot.Revision)
-	// Windows目录Sync可能报错；是否提交仍由既有真实字节三态判定，不要求伪造无错误。
-	if result.Saved == nil || !*result.Saved || result.Snapshot == nil {
-		t.Fatalf("原子替换后应证明真实字节已保存: %+v %v", result, saveErr)
+	replacementDigest := sha256.Sum256(replacement.Bytes())
+	result, saveErr = writer.Save(context.Background(), doc, snapshot.Revision)
+	// 正常保存必须完成本平台支持的提交步骤；读回新字节不能掩盖真实写入错误。
+	if saveErr != nil || result.Saved == nil || !*result.Saved || result.Snapshot == nil || result.Snapshot.Revision != Revision(hex.EncodeToString(replacementDigest[:])) {
+		t.Fatalf("替换后应无错误并证明新字节和版本已保存: %+v %v", result, saveErr)
+	}
+	if data, err := os.ReadFile(path); err != nil || !bytes.Equal(data, replacement.Bytes()) {
+		t.Fatalf("替换后必须读回实际新内容: %q %v", data, err)
 	}
 	after, err := os.Stat(path)
 	if err != nil || os.SameFile(before, after) {
@@ -278,6 +301,125 @@ func TestWindowsSettingsPathLockSurvivesAtomicReplacement(t *testing.T) {
 		t.Fatal("替换后的配置身份不得生成另一个路径锁")
 	}
 	windowsExpectCode(t, err, model.CodeInvalidRequest)
+}
+
+func TestWindowsSettingsReplacementFailurePreservesPreviousBytes(t *testing.T) {
+	store, root := windowsLockFixture(t)
+	path := filepath.Join(root, "settings.json")
+	var original bytes.Buffer
+	if err := Encode(&original, NewDocument()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, original.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	writer, err := store.OpenWriter(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Close()
+	snapshot, err := writer.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 既有安全读取句柄不共享删除：仅持有本次临时目标就能使真实Rename失败，
+	// 不修改ACL或模拟系统错误；其它只读句柄仍可核对旧内容及版本。
+	held, err := openManaged(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Close()
+	doc := snapshot.Document
+	doc.Desktop.Language = "zh-CN"
+	result, err := writer.Save(context.Background(), doc, snapshot.Revision)
+	var renameErr *os.LinkError
+	if !errors.As(err, &renameErr) || renameErr.Op != "rename" || result.Saved == nil || *result.Saved || result.Snapshot != nil {
+		t.Fatalf("真实替换失败必须保留底层错误且明确未保存: %+v %v", result, err)
+	}
+	windowsExpectCode(t, err, model.CodeIO)
+	if data, err := os.ReadFile(path); err != nil || !bytes.Equal(data, original.Bytes()) {
+		t.Fatalf("替换失败不得改变旧内容: %q %v", data, err)
+	}
+	if current, err := writer.Read(); err != nil || current.Revision != snapshot.Revision {
+		t.Fatalf("替换失败后旧版本和写锁必须仍有效: %+v %v", current, err)
+	}
+}
+
+func TestWindowsSettingsWriterReportsPostCommitErrorAndUnknown(t *testing.T) {
+	for _, outcome := range []string{"saved", "corrupt", "missing"} {
+		t.Run(outcome, func(t *testing.T) {
+			store, root := windowsLockFixture(t)
+			path := filepath.Join(root, "settings.json")
+			var original bytes.Buffer
+			if err := Encode(&original, NewDocument()); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, original.Bytes(), 0600); err != nil {
+				t.Fatal(err)
+			}
+			writer, err := store.OpenWriter(context.Background(), path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer writer.Close()
+			snapshot, err := writer.Read()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cause := errors.New("injected post-commit failure")
+			failure := &os.PathError{Op: "injected post-commit", Path: path, Err: cause}
+			// 复用写入注入边界，先真实提交，再模拟后续错误或外部改写/删除。
+			// 核验仍读取磁盘；否则错误返回值本身无法区分已保存与结果未知。
+			writer.write = func(ctx context.Context, path string, data []byte) error {
+				if err := AtomicManagedWrite(ctx, path, data); err != nil {
+					return err
+				}
+				switch outcome {
+				case "corrupt":
+					if err := os.WriteFile(path, []byte("damaged settings"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				case "missing":
+					if err := os.Remove(path); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return model.NewError(model.CodeIO, "注入提交后错误", failure)
+			}
+			doc := snapshot.Document
+			doc.Desktop.Language = "zh-CN"
+			var expected bytes.Buffer
+			if err := Encode(&expected, doc); err != nil {
+				t.Fatal(err)
+			}
+			expectedDigest := sha256.Sum256(expected.Bytes())
+			result, err := writer.Save(context.Background(), doc, snapshot.Revision)
+			var pathErr *os.PathError
+			if !errors.Is(err, cause) || !errors.As(err, &pathErr) || pathErr != failure {
+				t.Fatalf("提交后必须保留底层错误及错误链: %+v %v", result, err)
+			}
+			windowsExpectCode(t, err, model.CodeIO)
+			if outcome == "saved" {
+				if result.Saved == nil || !*result.Saved || result.Snapshot == nil || result.Snapshot.Revision != Revision(hex.EncodeToString(expectedDigest[:])) {
+					t.Fatalf("新内容已核实时应保留true及准确快照，同时报告错误: %+v %v", result, err)
+				}
+				if data, err := os.ReadFile(path); err != nil || !bytes.Equal(data, expected.Bytes()) {
+					t.Fatalf("已保存结果必须对应真实新内容: %q %v", data, err)
+				}
+				return
+			}
+			if result.Saved != nil || result.Snapshot != nil {
+				t.Fatalf("提交后内容损坏或目标消失时不能证明结果或返回成功快照: %+v %v", result, err)
+			}
+			if outcome == "missing" {
+				if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("缺失场景必须实际删除原目标: %v", err)
+				}
+			} else if data, err := os.ReadFile(path); err != nil || string(data) != "damaged settings" {
+				t.Fatalf("损坏场景必须实际写入第三种内容: %q %v", data, err)
+			}
+		})
+	}
 }
 
 func TestWindowsSettingsRejectsCaseSensitiveAncestorWithInsensitiveParents(t *testing.T) {

@@ -7,12 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/orzlee/displayKvm/internal/automation"
 	"github.com/orzlee/displayKvm/internal/config"
+	"github.com/orzlee/displayKvm/internal/controltools"
 	"github.com/orzlee/displayKvm/internal/model"
 	"github.com/orzlee/displayKvm/internal/scheduler"
 )
@@ -122,12 +124,25 @@ func TestUnifiedSettingsReusesBusinessValidationAndServiceReadiness(t *testing.T
 			if err := doc.Validate(); err == nil {
 				t.Fatal("现有校验规则未被复用")
 			}
+			resolved, err := doc.ValidateForService(controltools.Resolver{GOOS: "windows"})
+			if err == nil || resolved != (controltools.Paths{}) {
+				t.Fatalf("不依赖外部工具的平台仍须先拒绝业务和路径错误: %+v %v", resolved, err)
+			}
 		})
 	}
 	doc := unifiedFixture(t)
-	resolver, _ := settingsProductTools(t)
-	if _, err := doc.ValidateForService(resolver); err != nil {
-		t.Fatalf("空覆盖路径应使用随包工具: %v", err)
+	if runtime.GOOS == "windows" {
+		// Windows不提供POSIX执行位，也不依赖外部控制工具；不能强制Linux解析器
+		// 检查本机假程序。业务拒绝用例在分支前执行，非Windows继续覆盖原Linux模拟夹具。
+		resolved, err := doc.ValidateForService(controltools.Resolver{GOOS: "windows"})
+		if err != nil || resolved != (controltools.Paths{}) || doc.Runtime != (controltools.Paths{}) {
+			t.Fatalf("Windows空覆盖路径应无需外部工具即可就绪且不回写路径: %+v %v", resolved, err)
+		}
+		return
+	}
+	resolver, want := settingsProductTools(t)
+	if resolved, err := doc.ValidateForService(resolver); err != nil || resolved != want {
+		t.Fatalf("空覆盖路径应解析为随包工具: got=%+v want=%+v %v", resolved, want, err)
 	}
 	tool := filepath.Join(filepath.Dir(resolver.Executable), "tool")
 	doc.Runtime.ToolPath = tool

@@ -61,7 +61,7 @@ func SaveManagedFile(ctx context.Context, path string, data []byte) PersistenceR
 
 // 写入边界单独注入，核对仍读取真实文件；这使目录同步等“已改文件却报错”的
 // 路径可直接验证，避免测试用返回码模拟实际保存结果。
-// 此结果判定和下方原子写入机械承接daemon原算法，旧入口仅保留薄适配。
+// 此结果判定和下方临时文件替换流程机械承接daemon原算法，旧入口仅保留薄适配。
 func SaveManagedFileWith(ctx context.Context, path string, data []byte, write func(context.Context, string, []byte) error) PersistenceResult {
 	if path == "" || len(data) > model.MaxMessageBytes {
 		return PersistenceResult{Saved: known(false), Err: model.NewError(model.CodeInvalidRequest, "保存路径缺失或文档过大", nil)}
@@ -117,15 +117,5 @@ func AtomicManagedWrite(ctx context.Context, path string, data []byte) (result e
 	if _, _, err := ReadManagedFile(path); err != nil {
 		return err
 	}
-	if err := os.Rename(temporary, path); err != nil {
-		return model.NewError(model.CodeIO, "原子替换保存目标失败", err)
-	}
-	dir, err := os.Open(directory)
-	if err != nil {
-		return model.NewError(model.CodeIO, "打开保存目录核对持久化失败", err)
-	}
-	if err := errors.Join(dir.Sync(), dir.Close()); err != nil {
-		return model.NewError(model.CodeIO, "同步保存目录失败，须核对实际文件", err)
-	}
-	return nil
+	return commitManagedTemporary(temporary, path)
 }
