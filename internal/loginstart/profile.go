@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/orzlee/displayKvm/internal/controltools"
@@ -83,7 +84,9 @@ func openSource(path string, executable bool) (*os.File, error) {
 	if err != nil {
 		return nil, model.NewError(model.CodeIO, "检查显式启动文件失败", err)
 	}
-	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || (executable && info.Mode().Perm()&0111 == 0) {
+	// Windows普通文件没有Unix执行位；应用登记由平台核实PE及真实Go入口，
+	// 不能把合成的0666权限当成不可执行，也不能为兼容Windows给文件补假执行位。
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || (executable && runtime.GOOS != "windows" && info.Mode().Perm()&0111 == 0) {
 		return nil, model.NewError(model.CodeInvalidConfig, "启动路径必须引用普通文件，控制工具还必须可执行", nil)
 	}
 	file, err := openSourceFile(path)

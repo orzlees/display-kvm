@@ -6,7 +6,6 @@ import (
 	"errors"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"syscall"
 	"unicode/utf16"
@@ -126,23 +125,9 @@ func windowsProcedures() (*winProcedures, error) {
 func loadWindowsProcedures() (*winProcedures, error) {
 	// kernel32是Windows已加载的KnownDLL且也是Go自身使用的系统DLL。先从它取得真实
 	// 系统目录，再用绝对路径加载user32/dxva2，避免按工作目录或PATH搜索同名DLL。
-	kernel := syscall.NewLazyDLL("kernel32.dll")
-	systemDirectory := kernel.NewProc("GetSystemDirectoryW")
-	if err := systemDirectory.Find(); err != nil {
-		return nil, nativeError("查找GetSystemDirectoryW", err)
-	}
-	buffer := make([]uint16, 32768)
-	length, _, callErr := systemDirectory.Call(uintptr(unsafe.Pointer(&buffer[0])), uintptr(len(buffer)))
-	runtime.KeepAlive(buffer)
-	if length == 0 {
-		return nil, nativeBOOLResult("GetSystemDirectoryW", 0, callErr)
-	}
-	if length >= uintptr(len(buffer)) || buffer[length] != 0 {
-		return nil, nativeInvalid("GetSystemDirectoryW返回不可信的目录长度")
-	}
-	directory, err := winUTF16String(buffer[:length+1])
-	if err != nil || !filepath.IsAbs(directory) || strings.Contains(directory, "\x00") || len(utf16.Encode([]rune(directory))) != int(length) {
-		return nil, errors.Join(nativeInvalid("Windows系统目录无效"), err)
+	directory, err := windowsSystemDirectory()
+	if err != nil {
+		return nil, err
 	}
 	user32 := syscall.NewLazyDLL(filepath.Join(directory, "user32.dll"))
 	dxva2 := syscall.NewLazyDLL(filepath.Join(directory, "dxva2.dll"))

@@ -26,11 +26,14 @@ type LogicalMonitor struct {
 // Identity只是共享契约中的匹配线索；Capabilities必须来自传输实际提供的设备能力，
 // 不能因系统为Windows、显示名含LG或存在VCP函数就宣称设备支持相应协议。
 type PhysicalMonitor struct {
-	ID           string
-	Handle       uintptr
-	Name         string
-	Identity     model.IdentityHints
-	Capabilities model.DeviceCapabilities
+	ID            string
+	Handle        uintptr
+	Name          string
+	Identity      model.IdentityHints
+	Capabilities  model.DeviceCapabilities
+	lgEDIDHash    string
+	lgIdentityErr error
+	lgRoute       lgMonitorRoute
 }
 
 // Transport隔离枚举、物理句柄与VCP调用，使非Windows宿主不必加载原生API。
@@ -64,9 +67,11 @@ type monitorKey struct {
 }
 
 type deviceBinding struct {
-	key      monitorKey
-	name     string
-	identity model.IdentityHints
+	key        monitorKey
+	name       string
+	identity   model.IdentityHints
+	lgEDIDHash string
+	lgRoute    lgMonitorRoute
 }
 
 type openedMonitor struct {
@@ -117,7 +122,7 @@ func (b *Backend) Enumerate(ctx context.Context) ([]model.Device, error) {
 		devices = append(devices, model.Device{
 			BackendID: id, Name: monitor.physical.Name, Identity: monitor.physical.Identity,
 		})
-		bindings[id] = deviceBinding{key: monitor.key, name: monitor.physical.Name, identity: monitor.physical.Identity}
+		bindings[id] = deviceBinding{key: monitor.key, name: monitor.physical.Name, identity: monitor.physical.Identity, lgEDIDHash: monitor.physical.lgEDIDHash, lgRoute: monitor.physical.lgRoute}
 	}
 	// 只有完整枚举且全部清理成功后才发布新周期；释放失败不能变成半份成功设备列表。
 	if err = errors.Join(monitors.close(), operationError(ctx, "结束Windows显示器枚举", nil)); err != nil {
@@ -133,8 +138,25 @@ func (b *Backend) Enumerate(ctx context.Context) ([]model.Device, error) {
 }
 
 func (b *Backend) Capabilities(ctx context.Context, device model.Device) (capabilities model.DeviceCapabilities, err error) {
-	err = b.withDevice(ctx, device, func(monitor PhysicalMonitor) error {
+	err = b.withDevice(ctx, device, false, func(monitor PhysicalMonitor) error {
 		capabilities = supportedCapabilities(monitor.Capabilities)
+		if lg, ok := b.transport.(lgInputTransport); ok {
+			if checkErr := lg.checkLGInput(ctx, monitor); checkErr == nil {
+				capabilities.Protocols = append(capabilities.Protocols, model.ProtocolLGInputAlt)
+				capabilities.UnavailableReason = ""
+				// CanReadInput保留标准0x60读回能力。LG方案本身的ReadInput始终拒绝，
+				// 既有预览在首次写前强制按目标方案预读，不能用标准读数替代私有读回。
+			} else if len(capabilities.Protocols) != 0 {
+				// ADL是独立的可选通路，探测失败不能撤销已核验的标准能力；
+				// 明确LG提交会重做检查并返回原错误，不静默转成标准VCP或盲写。
+			} else if model.CodeOf(checkErr) != model.CodeUnsupportedOperation {
+				return checkErr
+			} else if monitor.Capabilities.UnavailableReason == "" {
+				// 原始标准诊断含失败阶段和系统码，不能被可选LG探测的不支持原因覆盖。
+				// 仅无原始诊断时，用具体LG原因替代supportedCapabilities补入的通用提示。
+				capabilities.UnavailableReason = checkErr.Error()
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -144,10 +166,13 @@ func (b *Backend) Capabilities(ctx context.Context, device model.Device) (capabi
 }
 
 func (b *Backend) ReadInput(ctx context.Context, device model.Device, scheme model.InputScheme) (observation model.InputObservation, err error) {
-	if err = validateScheme(scheme); err != nil {
+	if err = b.validateScheme(scheme); err != nil {
 		return observation, err
 	}
-	err = b.withDevice(ctx, device, func(monitor PhysicalMonitor) error {
+	if scheme.Protocol == model.ProtocolLGInputAlt {
+		return observation, lgUnsupported("LG私有输入协议未提供可靠读回，不能用于预览预读或确认")
+	}
+	err = b.withDevice(ctx, device, false, func(monitor PhysicalMonitor) error {
 		if err := requireVCP(monitor, true); err != nil {
 			return err
 		}
@@ -168,11 +193,19 @@ func (b *Backend) ReadInput(ctx context.Context, device model.Device, scheme mod
 }
 
 func (b *Backend) SetInput(ctx context.Context, device model.Device, scheme model.InputScheme) (model.WriteReceipt, error) {
-	if err := validateScheme(scheme); err != nil {
+	if err := b.validateScheme(scheme); err != nil {
 		return model.WriteReceipt{}, err
 	}
 	var sentAt time.Time
-	err := b.withDevice(ctx, device, func(monitor PhysicalMonitor) error {
+	err := b.withDevice(ctx, device, scheme.Protocol == model.ProtocolLGInputAlt, func(monitor PhysicalMonitor) error {
+		if scheme.Protocol == model.ProtocolLGInputAlt {
+			callErr := b.transport.(lgInputTransport).setLGInput(ctx, monitor, scheme.Value)
+			if err := operationError(ctx, "提交LG 0x50/0xF4输入命令，失败时不能排除已经发送", callErr); err != nil {
+				return err
+			}
+			sentAt = time.Now()
+			return nil
+		}
 		if err := requireVCP(monitor, false); err != nil {
 			return err
 		}
@@ -192,12 +225,14 @@ func (b *Backend) SetInput(ctx context.Context, device model.Device, scheme mode
 	return model.WriteReceipt{SentAt: sentAt}, nil
 }
 
-func validateScheme(scheme model.InputScheme) error {
+func (b *Backend) validateScheme(scheme model.InputScheme) error {
 	if err := scheme.Validate(); err != nil {
 		return err
 	}
 	if scheme.Protocol == model.ProtocolLGInputAlt {
-		return model.NewError(model.CodeUnsupportedProtocol, "Windows后端未提供LG alternate厂商协议，不能转为标准VCP", nil)
+		if _, ok := b.transport.(lgInputTransport); !ok {
+			return model.NewError(model.CodeUnsupportedProtocol, "当前Windows传输未提供LG alternate厂商协议，不能转为标准VCP", nil)
+		}
 	}
 	return nil
 }
@@ -231,7 +266,7 @@ func requireVCP(monitor PhysicalMonitor, read bool) error {
 	return nil
 }
 
-func (b *Backend) withDevice(ctx context.Context, device model.Device, operation func(PhysicalMonitor) error) (err error) {
+func (b *Backend) withDevice(ctx context.Context, device model.Device, requireLGIdentity bool, operation func(PhysicalMonitor) error) (err error) {
 	if err = operationError(ctx, "开始Windows显示器操作", nil); err != nil {
 		return err
 	}
@@ -258,6 +293,11 @@ func (b *Backend) withDevice(ctx context.Context, device model.Device, operation
 		}
 		if monitor.physical.Name != binding.name || monitor.physical.Identity != binding.identity {
 			return model.NewError(model.CodeUnreachable, "Windows显示器身份已变化，需要重新枚举和确认", nil)
+		}
+		// LG依赖的EDID快照独立于标准身份，SetupAPI暂时不可用不能使已有0x60路径退化。
+		// 只有私有写入才要求本周期EDID始终一致；新出现证据也必须先重新枚举确认。
+		if requireLGIdentity && (monitor.physical.lgEDIDHash != binding.lgEDIDHash || monitor.physical.lgRoute != binding.lgRoute) {
+			return model.NewError(model.CodeUnreachable, "LG显示实例EDID或源目标路由已变化，需要重新枚举和确认", nil)
 		}
 		b.mu.RLock()
 		current := b.generation == generation

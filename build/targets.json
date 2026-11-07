@@ -14,15 +14,36 @@
     "targets": [
       {"id": "darwin-amd64", "goos": "darwin", "goarch": "amd64", "archive": "tar.gz", "status": "candidate", "limitations": "macOS Intel显示器控制后端不适用；未验证安装运行与硬件"},
       {"id": "darwin-arm64", "goos": "darwin", "goarch": "arm64", "archive": "tar.gz", "status": "candidate", "limitations": "用户自备m1ddc；未验证真实显示器链路"},
-      {"id": "linux-amd64", "goos": "linux", "goarch": "amd64", "archive": "tar.gz", "status": "candidate", "limitations": "用户自备ddcutil；3.0.2仅源码格式适配；未验证Linux安装运行与硬件"},
-      {"id": "linux-arm64", "goos": "linux", "goarch": "arm64", "archive": "tar.gz", "status": "candidate", "limitations": "用户自备ddcutil；3.0.2仅源码格式适配；未验证Linux安装运行与硬件"},
-      {"id": "windows-amd64", "goos": "windows", "goarch": "amd64", "archive": "zip", "status": "candidate", "limitations": "原生显示器传输、IPC目录ACL与单实例保护未提供；后台及连接拒绝启动"},
-      {"id": "windows-arm64", "goos": "windows", "goarch": "arm64", "archive": "zip", "status": "candidate", "limitations": "原生显示器传输、IPC目录ACL与单实例保护未提供；后台及连接拒绝启动"}
-    ]
+      {"id": "linux-amd64", "goos": "linux", "goarch": "amd64", "archive": "tar.gz", "status": "native-payload-required", "limitations": "必须随包ddcutil3.0.2及systemd258的busctl/udevadm和非glibc依赖、对应源码与许可；原生生成入口已提供，真实载荷、安装运行和硬件尚未验证"},
+      {"id": "linux-arm64", "goos": "linux", "goarch": "arm64", "archive": "tar.gz", "status": "native-payload-required", "limitations": "必须随包ddcutil3.0.2及systemd258的busctl/udevadm和非glibc依赖、对应源码与许可；原生生成入口已提供，真实载荷、安装运行和硬件尚未验证"},
+      {"id": "windows-amd64", "goos": "windows", "goarch": "amd64", "archive": "zip", "status": "candidate", "limitations": "原生后台、IPC与显示器控制实现及Windows原生CI测试入口已提供；真实测试运行、登录启动、硬件与安装路径仍待验收；本核心包不是GUI"},
+      {"id": "windows-arm64", "goos": "windows", "goarch": "arm64", "archive": "zip", "status": "candidate", "limitations": "保留原生arm64支持及CI无屏测试入口；真实测试运行、登录启动、硬件与安装路径仍待验收；本核心包不是GUI"}
+    ],
+    "linux_payload": {
+      "entry": "python3 build/linux/bundle.py generate --arch <amd64|arm64> --run-id <native-run-id>",
+      "source_lock": "build/linux/source-lock.json",
+      "baseline": "debian-12-glibc-2.36",
+      "output": "build/out/<native-run-id>/linux/<arch>",
+      "core_argument": "--linux-tools-run-id <native-run-id>",
+      "native_runner_required": true
+    }
   },
   "desktop": {
-    "targets": [{"id": "darwin-arm64", "goos": "darwin", "goarch": "arm64", "cgo_enabled": "1", "tags": ["production"], "entry": "sh desktop/build-macos.sh", "app": "desktop/bin/DisplayKvm.app", "status": "native-build-entry", "minimum_macos_declaration": "13.0.0", "signing": "local-ad-hoc", "limitations": "原脚本不检查实际Go版本；包装检查二进制Go1.27.3及实际Info.plist；发布签名、公证与硬件未验证"}],
-    "other_targets": "Windows/Linux及macOS Intel桌面无已验证构建运行记录"
+    "targets": [
+      {"id": "darwin-arm64", "goos": "darwin", "goarch": "arm64", "cgo_enabled": "1", "tags": ["production"], "entry": "sh desktop/build-macos.sh", "app": "desktop/bin/DisplayKvm.app", "status": "native-build-entry", "minimum_macos_declaration": "13.0.0", "signing": "local-ad-hoc", "limitations": "原脚本不检查实际Go版本；包装检查二进制Go1.27.3及实际Info.plist；发布签名、公证与硬件未验证"},
+      {"id": "windows-amd64", "goos": "windows", "goarch": "amd64", "cgo_enabled": "0", "tags": ["production"], "entry": "sh build/build-windows.sh --target windows-amd64 --version <label> --run-id <gui-id>", "app": "build/out/<gui-id>/displaykvm.exe", "package_entry": "sh packaging/package.sh windows --run-id <package-id> --app build/out/<gui-id>/displaykvm.exe --core-run-id <core-id>", "archive": "zip", "status": "candidate-build-entry", "signing": "unsigned", "limitations": "编译入口与原生无屏测试工作流已提供但未执行；Windows10/11及相应架构WebView2 Runtime为运行前提；运行、登录启动与硬件待验收"},
+      {"id": "windows-arm64", "goos": "windows", "goarch": "arm64", "cgo_enabled": "0", "tags": ["production"], "entry": "sh build/build-windows.sh --target windows-arm64 --version <label> --run-id <gui-id>", "app": "build/out/<gui-id>/displaykvm.exe", "package_entry": "sh packaging/package.sh windows --run-id <package-id> --app build/out/<gui-id>/displaykvm.exe --core-run-id <core-id>", "archive": "zip", "status": "candidate-build-entry", "signing": "unsigned", "limitations": "保留arm64 GUI构建与原生Windows测试入口；未生成或验证真实WindowsZIP，运行、登录启动与硬件待验收"}
+    ],
+    "windows_programs": ["displaykvm.exe", "displaykvmd.exe", "displaykvm-cli.exe"],
+    "windows_start_order": "displaykvmd.exe后台先启动，再打开displaykvm.exe；登录项分别管理",
+    "other_targets": "Linux及macOS Intel桌面无已验证构建运行记录；Windows双架构入口已提供但尚无真实构建运行记录"
+  },
+  "ci": {
+    "entry": ".github/workflows/build.yml",
+    "full_candidate_gate": "原生Debian12双架构真实Linux载荷与来源许可通过，且双架构Windows原生无屏测试通过，再放行六核心与GUI候选",
+    "publish": "push v*标签，或workflow_dispatch显式publish=true并指定与当前提交匹配的已存在release_tag；普通手动构建只上传artifact",
+    "release_materials": "六核心+macOS arm64 GUI+Windows双架构GUI共九份归档及SHA256；许可与source随包保留，缺失即阻止发布",
+    "execution_status": "仅实现入口，未执行Actions、下载验证或Release发布；runner及GITHUB_TOKEN实际权限待验收"
   },
   "output_root": "build/out/<run-id>",
   "distribution_status": "候选构建准备；许可齐备不等于平台、签名或硬件验收通过"

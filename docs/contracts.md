@@ -70,6 +70,32 @@ v1是本契约专门定义的兼容输入格式，不代表已有历史发布、
 
 `Encode`只输出校验后的v2，先完整编码并检查大小再写入流；非法配置不写任何字节，写入失败仍可能产生部分流输出。它不创建目录、不修改文件权限、不自动保存迁移。后续保存实现必须使用私有临时文件和原子替换，保留原文件直到成功；读取失败不能覆盖原文件。并发入口应读取不可变配置快照，更新协调由后台负责。
 
+### 文章参数与绑定字段示例
+
+以下为独立字段片段，用于解释配置结构，不是一份可直接启用的完整配置。显示器 ID 需要先从枚举结果建立稳定绑定；不得用文章中的显示器序号、名称、真实序列号或路径替代。当前平台与协议边界见[兼容说明](compatibility.md)。
+
+```json
+{"input_schemes":[{"id":"lg_dp_example","protocol":"lg_input_alt","value":208},{"id":"lg_hdmi_example","protocol":"lg_input_alt","value":145},{"id":"standard_dp_example","protocol":"vcp","vcp_code":96,"value":15},{"id":"standard_hdmi_example","protocol":"vcp","vcp_code":96,"value":17}]}
+```
+
+LG 私有方案不填写 vcp_code（或按既有契约设为 0）；标准 VCP 的 96 即 0x60。所有 JSON 数值使用十进制。208/145 和 15/17 仅为文章中的端口值示例，必须按自己的显示器核对。
+
+以下仅为一个 `targets[].inputs[]` 元素：
+
+```json
+{"display_id":"display_lg_example","scheme_id":"lg_dp_example"}
+```
+
+display_id 和 scheme_id 必须引用本配置中已经存在且有效的对象，同一目标不能重复同一显示器。
+
+以下仅为 USB 匹配字段片段：
+
+```json
+{"vendor_id":1507,"product_id":1552}
+```
+
+1507/1552 仅是文章中的 USB 厂商/产品标识示例，使用整数，不使用十六进制文本字符串。应用不会据此自动绑定当前设备；请先枚举并确认自己的 USB 事件与显示器绑定，再启用规则。
+
 ## 3. 统一请求、逐屏结果与错误
 
 `SwitchRequest`字段：`id`、`target_id`、可选`display_ids`、`group_id`、`timeout_ms`。唯一校验入口为`SwitchRequest.Validate() error`；`EffectiveTimeout() time.Duration`须在校验后调用。

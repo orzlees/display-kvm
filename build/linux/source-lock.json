@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "baseline": "debian-12-glibc-2.36",
+  "sources": [
+    {
+      "name": "ddcutil",
+      "version": "3.0.2",
+      "tag": "v3.0.2",
+      "commit": "5085ae9bb1a8e5bd8db717d80dd80a279a0f05fb",
+      "url": "https://codeload.github.com/rockowitz/ddcutil/tar.gz/5085ae9bb1a8e5bd8db717d80dd80a279a0f05fb",
+      "sha256": "c5c271131ba40e009f0a71a04e8856f4ca4647e9e22d38e23344fdc7714fcc28",
+      "license": "GPL-2.0-or-later",
+      "configure": ["--prefix=/usr", "--disable-usb", "--disable-udev", "--disable-systemd", "--disable-dbus", "--disable-x11", "--disable-lib", "--disable-build-timestamp", "--enable-drm"]
+    },
+    {
+      "name": "systemd",
+      "version": "258",
+      "tag": "v258",
+      "commit": "781d9d0789379d1ea1f2ecefb804d41e9c8b6c38",
+      "url": "https://codeload.github.com/systemd/systemd/tar.gz/781d9d0789379d1ea1f2ecefb804d41e9c8b6c38",
+      "sha256": "9421b006c0e4c816fe06c004204091b09fd628891403dcdf6511ceb8ce384f13",
+      "license": "LGPL-2.1-or-later AND GPL-2.0-or-later; complete upstream license set retained",
+      "meson": ["--prefix=/usr", "--buildtype=release", "--wrap-mode=nodownload", "-Dauto_features=disabled", "-Dmode=release", "-Dstandalone-binaries=true", "-Dversion-tag=258", "-Dtests=false", "-Dinstall-tests=false", "-Dlibmount=enabled", "-Dman=disabled", "-Dhtml=disabled", "-Dbootloader=disabled", "-Dbpf-framework=disabled"]
+    }
+  ]
+}

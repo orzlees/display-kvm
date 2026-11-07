@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"debug/buildinfo"
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -25,6 +24,8 @@ import (
 const agentMarker = "io.github.orzlee.displaykvm.loginstart.v1"
 
 func platformAvailable() error { return nil }
+
+func platformIdentity() error { return nil }
 
 // 文件检查后仍可能被替换成链接或FIFO；打开本身也必须拒绝链接并保持非阻塞，
 // 随后的inode比较才能验证同一普通文件，而不会先卡在打开设备的副作用上。
@@ -118,7 +119,7 @@ func readPrivate(path string, uid int) ([]byte, os.FileInfo, error) {
 	return data, info, nil
 }
 
-func (m *Manager) settingsLock() (*os.File, error) {
+func (m *Manager) settingsLock() (io.Closer, error) {
 	directory := filepath.Dir(m.profilePath())
 	if err := secureDirectory(directory, m.env.UID, true, true); err != nil {
 		return nil, err
@@ -186,37 +187,6 @@ func atomicPrivate(path string, data []byte, uid int, expected os.FileInfo) (*bo
 		return nil, model.NewError(model.CodeIO, "登录启动文件已替换，但读回无法确认", err)
 	}
 	return boolean(true), nil
-}
-
-func (m *Manager) saveProfile(ctx context.Context, profile ServiceProfile) (Result, error) {
-	if err := ctx.Err(); err != nil {
-		return m.result(ctx, boolean(false), err)
-	}
-	if _, err := loadProfileDocument(profile); err != nil {
-		return m.result(ctx, boolean(false), err)
-	}
-	lock, err := m.settingsLock()
-	if err != nil {
-		return m.result(ctx, boolean(false), err)
-	}
-	var expected os.FileInfo
-	data, info, err := readPrivate(m.profilePath(), m.env.UID)
-	if err == nil {
-		_, err = decodeProfile(data)
-		expected = info
-	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return m.result(ctx, boolean(false), errors.Join(err, lock.Close()))
-	}
-	encoded, err := json.Marshal(profile)
-	if err != nil {
-		return m.result(ctx, boolean(false), errors.Join(err, lock.Close()))
-	}
-	if err := ctx.Err(); err != nil {
-		return m.result(ctx, boolean(false), errors.Join(err, lock.Close()))
-	}
-	saved, writeErr := atomicPrivate(m.profilePath(), append(encoded, '\n'), m.env.UID, expected)
-	return m.result(ctx, saved, errors.Join(writeErr, lock.Close()))
 }
 
 func (m *Manager) agentPath(target Target) string {

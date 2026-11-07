@@ -37,6 +37,9 @@ type nativeDisplayPath struct {
 type nativeTargetName struct {
 	Path         string
 	FriendlyName string
+	source       nativeDisplayID
+	target       nativeDisplayID
+	gdi          string
 }
 
 type nativePhysicalMonitor struct {
@@ -177,6 +180,8 @@ func (t *nativeTransport) displayMapping(ctx context.Context) (map[string]native
 			return nil, nativeAmbiguous("同一GDI名称对应多个活动显示目标")
 		}
 		seenPaths[target.Path] = true
+		target.source, target.target = path.Source, path.Target
+		target.gdi = gdi
 		mapping[gdi] = target
 	}
 	return mapping, ctx.Err()
@@ -258,6 +263,26 @@ func (t *nativeTransport) GetPhysicalMonitors(ctx context.Context, monitor Logic
 		return result, err
 	}
 	result[0].Capabilities, err = t.monitorCapabilities(ctx, result[0].Handle)
+	if err != nil {
+		return result, err
+	}
+	if api, ok := t.api.(nativeLGAPI); ok {
+		result[0].lgRoute = lgRouteForTarget(target)
+		// EDID是LG身份链的额外证据，标准DDC不依赖SetupAPI或ADL。读取失败不阻断
+		// 标准屏枚举；LG检查会重新读取并明确拒绝缺证，不会把空摘要当成可写能力。
+		if data, readErr := api.monitorEDID(target.Path); readErr == nil {
+			if edid, validErr := validatedLGEDID(data); validErr == nil {
+				result[0].lgEDIDHash = lgEDIDHash(edid)
+			} else {
+				result[0].lgIdentityErr = validErr
+			}
+		} else {
+			result[0].lgIdentityErr = readErr
+		}
+		if _, err := t.targetForMonitor(ctx, monitor); err != nil {
+			return result, err
+		}
+	}
 	return result, err
 }
 
@@ -284,7 +309,7 @@ func (t *nativeTransport) monitorCapabilities(ctx context.Context, handle uintpt
 		return model.DeviceCapabilities{}, err
 	}
 	if !supported {
-		return model.DeviceCapabilities{UnavailableReason: "显示器真实MCCS能力未报告VCP 0x60输入控制"}, nil
+		return model.DeviceCapabilities{UnavailableReason: "显示器MCCS能力未声明VCP 0x60，标准输入支持状态未知，禁止盲写"}, nil
 	}
 	return model.DeviceCapabilities{Protocols: []model.InputProtocol{model.ProtocolVCP}, CanReadInput: true}, ctx.Err()
 }

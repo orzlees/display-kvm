@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/orzlee/displayKvm/internal/model"
 )
@@ -82,8 +83,8 @@ func New(opts Options) (*Manager, error) {
 	if err != nil {
 		return nil, model.NewError(model.CodePermissionDenied, "无法确定登录启动的当前用户目录", err)
 	}
-	if !absolutePath(env.ConfigDir) || !absolutePath(env.HomeDir) || env.UID < 0 {
-		return nil, model.NewError(model.CodePermissionDenied, "登录启动必须使用当前用户的绝对目录及有效用户编号", nil)
+	if err := validateEnvironment(env, runtime.GOOS, platformIdentity); err != nil {
+		return nil, err
 	}
 	if opts.Run == nil {
 		opts.Run = func(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -91,6 +92,15 @@ func New(opts Options) (*Manager, error) {
 		}
 	}
 	return &Manager{env: env, run: opts.Run}, nil
+}
+
+func validateEnvironment(env Environment, goos string, identity func() error) error {
+	if !absolutePath(env.ConfigDir) || !absolutePath(env.HomeDir) || (goos != "windows" && env.UID < 0) {
+		return model.NewError(model.CodePermissionDenied, "登录启动必须使用当前用户的绝对目录及有效平台身份", nil)
+	}
+	// Windows的Getuid固定返回-1；安全边界来自真实进程令牌的SID，不能通过填0
+	// 冒充Unix用户。即使外部提供目录，仍必须执行平台身份核验并保留令牌错误。
+	return identity()
 }
 
 func (m *Manager) profilePath() string {

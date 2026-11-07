@@ -6,16 +6,23 @@ die() { printf '%s\n' "$*" >&2; exit 1; }
 target=all
 version=
 run_id=
+linux_tools_run_id=
 while [ "$#" -gt 0 ]; do
     [ "$#" -ge 2 ] || die '参数必须提供值'
     case "$1" in
         --target) target=$2 ;;
         --version) version=$2 ;;
         --run-id) run_id=$2 ;;
+        --linux-tools-run-id) linux_tools_run_id=$2 ;;
         *) die "未知参数：$1" ;;
     esac
     shift 2
 done
+if [ -n "$linux_tools_run_id" ]; then
+    case "$linux_tools_run_id" in [A-Za-z0-9]*) ;; *) die 'Linux载荷编号必须以字母或数字开头' ;; esac
+    case "$linux_tools_run_id" in *[!A-Za-z0-9._-]*) die 'Linux载荷编号包含无效字符' ;; esac
+    [ "${#linux_tools_run_id}" -le 64 ] || die 'Linux载荷编号不能超过64字符'
+fi
 for value in "$version" "$run_id"; do
     case "$value" in [A-Za-z0-9]*) ;; *) die '标签必须以字母或数字开头' ;; esac
     case "$value" in ''|.*|*[!A-Za-z0-9._-]*) die '版本标签与运行编号须以字母或数字开头，仅含字母、数字、点、下划线、短横线' ;; esac
@@ -26,6 +33,10 @@ case "$target" in
     all) targets=$all_targets ;;
     darwin-amd64|darwin-arm64|linux-amd64|linux-arm64|windows-amd64|windows-arm64) targets=$target ;;
     *) die '未知核心目标' ;;
+esac
+case "$target" in
+    all|linux-*) [ -n "$linux_tools_run_id" ] || die 'Linux目标必须提供--linux-tools-run-id原生工具载荷编号' ;;
+    *) [ -z "$linux_tools_run_id" ] || die '非Linux目标不接受Linux载荷编号' ;;
 esac
 # 禁止读取个人Go配置、隐式下载或继承构建标签，确保工件与许可查询使用同一契约。
 export GOENV=off GOWORK=off GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS= GOEXPERIMENT=
@@ -54,5 +65,9 @@ for item in $targets; do
         GOOS=$os GOARCH=$arch go build -mod=readonly -trimpath -buildvcs=false -o "$run/bin/$item/$program$suffix" "./cmd/$program"
     done
 done
-"$run/tools/notices" record-core --repo "$root" --run "$run" --version "$version"
+if [ -n "$linux_tools_run_id" ]; then
+    "$run/tools/notices" record-core --repo "$root" --run "$run" --version "$version" --linux-tools-run "$root/build/out/$linux_tools_run_id"
+else
+    "$run/tools/notices" record-core --repo "$root" --run "$run" --version "$version"
+fi
 printf '核心候选产物：%s\n' "$run"

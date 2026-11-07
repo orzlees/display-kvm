@@ -163,24 +163,32 @@ func TestExplicitInputStrategiesAndSendEvidence(t *testing.T) {
 		protocol model.InputProtocol
 		field    string
 		value    uint16
+		decimal  string
 	}{
-		{model.ProtocolVCP, "input", 1},
-		{model.ProtocolVCP, "input", 17},
-		{model.ProtocolLGInputAlt, "input-alt", 144},
-		{model.ProtocolLGInputAlt, "input-alt", 65535},
+		{model.ProtocolVCP, "input", 1, "1"},
+		{model.ProtocolVCP, "input", 17, "17"},
+		{model.ProtocolLGInputAlt, "input-alt", 144, "144"},
+		// 随包m1ddc通过atoi解析数值；0xD0、0x91若原样传入会变成0，
+		// 因此期望参数固定为208、145，避免测试随实现一起误用十六进制文本。
+		{model.ProtocolLGInputAlt, "input-alt", 0xD0, "208"},
+		{model.ProtocolLGInputAlt, "input-alt", 0x91, "145"},
+		{model.ProtocolLGInputAlt, "input-alt", 65535, "65535"},
 	} {
 		t.Run(fmt.Sprintf("%s/%d", tc.protocol, tc.value), func(t *testing.T) {
 			var commands [][]string
-			b := testBackend(runnerFunc(func(_ context.Context, _ string, args ...string) (CommandOutput, error) {
+			b := testBackend(runnerFunc(func(_ context.Context, path string, args ...string) (CommandOutput, error) {
+				if path != "/user supplied/m1ddc" {
+					t.Fatalf("输入操作必须直接使用显式工具路径：%q", path)
+				}
 				commands = append(commands, append([]string(nil), args...))
 				if reflect.DeepEqual(args, []string{"display", "list"}) {
 					// 枚举序号可变；命令仍须选择原UUID，不能按旧序号误切另一屏。
 					return CommandOutput{Stdout: "[1] Other (" + secondUUID + ")\n[2] Screen (Desk) (" + firstUUID + ")\n"}, nil
 				}
 				if len(args) == 4 && args[2] == "get" {
-					return CommandOutput{Stdout: fmt.Sprintf("%d\n", tc.value)}, nil
+					return CommandOutput{Stdout: tc.decimal + "\n"}, nil
 				}
-				return CommandOutput{Stdout: fmt.Sprintf("Writing %d\n", tc.value)}, nil
+				return CommandOutput{Stdout: "Writing " + tc.decimal + "\n"}, nil
 			}))
 			started := time.Now()
 			observation, err := b.ReadInput(context.Background(), testDevice(), testScheme(tc.protocol, tc.value))
@@ -191,7 +199,7 @@ func TestExplicitInputStrategiesAndSendEvidence(t *testing.T) {
 			if err != nil || receipt.SentAt.IsZero() || receipt.SentAt.Before(started) {
 				t.Fatalf("成功发送须有非零回执：%+v，%v", receipt, err)
 			}
-			want := [][]string{{"display", "list"}, {"display", "uuid=" + firstUUID, "get", tc.field}, {"display", "list"}, {"display", "uuid=" + firstUUID, "set", tc.field, fmt.Sprint(tc.value)}}
+			want := [][]string{{"display", "list"}, {"display", "uuid=" + firstUUID, "get", tc.field}, {"display", "list"}, {"display", "uuid=" + firstUUID, "set", tc.field, tc.decimal}}
 			if !reflect.DeepEqual(commands, want) {
 				t.Fatalf("协议参数应保持原值且无回退/重试：got=%q want=%q", commands, want)
 			}
@@ -199,7 +207,7 @@ func TestExplicitInputStrategiesAndSendEvidence(t *testing.T) {
 	}
 }
 
-func TestStaleOrAlteredDevicesNeverWrite(t *testing.T) {
+func TestStaleOrAlteredDevicesNeverStartInputIO(t *testing.T) {
 	for _, tc := range []struct {
 		name, list string
 		device     model.Device
@@ -208,6 +216,8 @@ func TestStaleOrAlteredDevicesNeverWrite(t *testing.T) {
 		{"changed device description", "[1] Replaced (" + firstUUID + ")\n", testDevice()},
 		{"forged backend selector", firstList, model.Device{BackendID: "1"}},
 		{"unbound current UUID", firstList, model.Device{BackendID: "uuid=" + firstUUID}},
+		{"selector with shell separator", firstList, model.Device{BackendID: "uuid=" + firstUUID + "; printf forged", Name: "Screen (Desk)", Identity: model.IdentityHints{Path: "m1ddc:uuid:" + firstUUID}}},
+		{"selector with command substitution", firstList, model.Device{BackendID: "uuid=" + firstUUID + "$(printf forged)", Name: "Screen (Desk)", Identity: model.IdentityHints{Path: "m1ddc:uuid:" + firstUUID}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
@@ -218,9 +228,15 @@ func TestStaleOrAlteredDevicesNeverWrite(t *testing.T) {
 				}
 				return CommandOutput{Stdout: tc.list}, nil
 			}))
-			receipt, err := b.SetInput(context.Background(), tc.device, testScheme(model.ProtocolVCP, 17))
-			if model.CodeOf(err) != model.CodeNotFound || !receipt.SentAt.IsZero() || calls > 1 {
-				t.Fatalf("失效身份应明确拒绝：%+v，%v，calls=%d", receipt, err, calls)
+			for _, scheme := range []model.InputScheme{testScheme(model.ProtocolVCP, 17), testScheme(model.ProtocolLGInputAlt, 0xD0)} {
+				observation, readErr := b.ReadInput(context.Background(), tc.device, scheme)
+				receipt, writeErr := b.SetInput(context.Background(), tc.device, scheme)
+				if model.CodeOf(readErr) != model.CodeNotFound || model.CodeOf(writeErr) != model.CodeNotFound || observation.Value != nil || !observation.ObservedAt.IsZero() || !receipt.SentAt.IsZero() {
+					t.Fatalf("失效身份不得读写或产生结果证据：observation=%+v receipt=%+v read=%v write=%v", observation, receipt, readErr, writeErr)
+				}
+			}
+			if calls != 4 {
+				t.Fatalf("每次读写只能重新枚举，不得启动输入命令：calls=%d", calls)
 			}
 		})
 	}
@@ -236,6 +252,7 @@ func TestCommandFailuresKeepStageCauseAndNeverBecomeSuccess(t *testing.T) {
 		{"missing tool", "", os.ErrNotExist, model.CodeBackendUnavailable},
 		{"execution permission", "", os.ErrPermission, model.CodePermissionDenied},
 		{"DDC failed", "DDC communication failure: fixture I/O error\n", underlying, model.CodeTransport},
+		{"writing text with failed exit", "Writing 144\n", underlying, model.CodeTransport},
 		{"no transport", "Could not find a suitable external display.\n", underlying, model.CodeUnreachable},
 		{"removed during command", "The specified display does not exist. Use 'display list' to list displays\n", underlying, model.CodeNotFound},
 		{"canceled", "", context.Canceled, model.CodeCanceled},
@@ -279,6 +296,62 @@ func TestCommandFailuresKeepStageCauseAndNeverBecomeSuccess(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestLGReadbackFailureDoesNotConfirmSubmittedWrite(t *testing.T) {
+	underlying := errors.New("fixture private read failed")
+	for _, tc := range []struct {
+		name, stdout string
+		err          error
+	}{
+		{"transport failure", "DDC communication failure: fixture private read\n", underlying},
+		{"value with failed exit", "208\n", underlying},
+		{"empty", "", nil},
+		{"zero", "0\n", nil},
+		{"overflow", "65536\n", nil},
+		{"negative", "-1\n", nil},
+		{"signed decimal", "+208\n", nil},
+		{"hexadecimal", "0xD0\n", nil},
+		{"multiple values", "208\n145\n", nil},
+		{"write acknowledgement", "Writing 208\n", nil},
+		{"DDC diagnostic with successful exit", "DDC communication failure: fixture private read\n", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var commands [][]string
+			b := testBackend(runnerFunc(func(_ context.Context, _ string, args ...string) (CommandOutput, error) {
+				commands = append(commands, append([]string(nil), args...))
+				switch {
+				case reflect.DeepEqual(args, []string{"display", "list"}):
+					return CommandOutput{Stdout: firstList}, nil
+				case reflect.DeepEqual(args, []string{"display", "uuid=" + firstUUID, "set", "input-alt", "208"}):
+					return CommandOutput{Stdout: "Writing 208\n"}, nil
+				case reflect.DeepEqual(args, []string{"display", "uuid=" + firstUUID, "get", "input-alt"}):
+					return CommandOutput{Stdout: tc.stdout}, tc.err
+				default:
+					t.Fatalf("私有读回失败不得重试、回退或补发切换：%q", args)
+					return CommandOutput{}, nil
+				}
+			}))
+			scheme := testScheme(model.ProtocolLGInputAlt, 0xD0)
+			receipt, err := b.SetInput(context.Background(), testDevice(), scheme)
+			if err != nil || receipt.SentAt.IsZero() {
+				t.Fatalf("有效写入确认应产生提交回执：%+v，%v", receipt, err)
+			}
+			// LG私有写入可提交而读回仍不可用；不能拿目标值或Writing文本
+			// 补造观测，否则上层会误将不可安全恢复的方案用于预览。
+			observation, err := b.ReadInput(context.Background(), testDevice(), scheme)
+			if model.CodeOf(err) != model.CodeTransport || observation.Value != nil || !observation.ObservedAt.IsZero() {
+				t.Fatalf("私有读回失败不能确认目标值或提供恢复依据：%+v，%v", observation, err)
+			}
+			if tc.err != nil && !errors.Is(err, tc.err) {
+				t.Fatalf("私有读回须保留工具失败根因：%v", err)
+			}
+			want := [][]string{{"display", "list"}, {"display", "uuid=" + firstUUID, "set", "input-alt", "208"}, {"display", "list"}, {"display", "uuid=" + firstUUID, "get", "input-alt"}}
+			if !reflect.DeepEqual(commands, want) {
+				t.Fatalf("提交后仅允许独立读取，不得回退或盲目恢复：got=%q want=%q", commands, want)
+			}
+		})
 	}
 }
 

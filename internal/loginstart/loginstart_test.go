@@ -2,6 +2,8 @@ package loginstart
 
 import (
 	"errors"
+	"fmt"
+	"path/filepath"
 	"runtime"
 	"testing"
 
@@ -9,7 +11,7 @@ import (
 )
 
 func TestLoginStartProfileStrictStructure(t *testing.T) {
-	valid := `{"version":2,"config_path":"/settings.json"}`
+	valid := fmt.Sprintf(`{"version":2,"config_path":%q}`, filepath.Join(t.TempDir(), "settings.json"))
 	if _, err := decodeProfile([]byte(valid)); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +38,7 @@ func TestLoginStartProfileStrictStructure(t *testing.T) {
 }
 
 func TestLoginStartUnsupportedHasClassifiableError(t *testing.T) {
-	if runtime.GOOS == "darwin" {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		t.Skip("仅验证其它平台的不支持边界")
 	}
 	_, err := New(Options{})

@@ -3,16 +3,18 @@ set -eu
 umask 077
 root=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 die() { printf '%s\n' "$*" >&2; exit 1; }
-[ "$#" -gt 0 ] || die '用法：package.sh core|desktop --run-id 编号 [--app 路径]'
+[ "$#" -gt 0 ] || die '用法：package.sh core|desktop|windows --run-id 编号 [--app 路径] [--core-run-id 编号]'
 kind=$1
 shift
 run_id=
 app=
+core_run_id=
 while [ "$#" -gt 0 ]; do
     [ "$#" -ge 2 ] || die '参数必须提供值'
     case "$1" in
         --run-id) run_id=$2 ;;
         --app) app=$2 ;;
+        --core-run-id) core_run_id=$2 ;;
         *) die "未知参数：$1" ;;
     esac
     shift 2
@@ -20,7 +22,17 @@ done
 case "$run_id" in [A-Za-z0-9]*) ;; *) die '运行编号必须以字母或数字开头' ;; esac
 case "$run_id" in *[!A-Za-z0-9._-]*) die '运行编号格式无效' ;; esac
 [ "${#run_id}" -le 64 ] || die '运行编号不能超过64字符'
-case "$kind" in core) [ -z "$app" ] || die 'core不接受--app' ;; desktop) [ -n "$app" ] || die 'desktop必须提供--app' ;; *) die '只接受core或desktop' ;; esac
+case "$kind" in
+    core) [ -z "$app" ] && [ -z "$core_run_id" ] || die 'core不接受--app或--core-run-id' ;;
+    desktop) [ -n "$app" ] && [ -z "$core_run_id" ] || die 'desktop必须提供--app且不接受--core-run-id' ;;
+    windows)
+        [ -n "$app" ] || die 'windows必须提供--app'
+        case "$core_run_id" in [A-Za-z0-9]*) ;; *) die '必须提供合法核心运行编号' ;; esac
+        case "$core_run_id" in *[!A-Za-z0-9._-]*) die '核心运行编号格式无效' ;; esac
+        [ "${#core_run_id}" -le 64 ] || die '核心运行编号不能超过64字符'
+        ;;
+    *) die '只接受core、desktop或windows' ;;
+esac
 export GOENV=off GOWORK=off GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS= GOEXPERIMENT=
 export CGO_ENABLED=0 GOAMD64=v1 GOARM64=v8.0
 [ "$(go env GOVERSION)" = go1.27.3 ] || die '包装必须使用实际Go1.27.3工具链'
@@ -28,10 +40,14 @@ export CGO_ENABLED=0 GOAMD64=v1 GOARM64=v8.0
 if [ ! -e "$root/build/out" ] && [ ! -L "$root/build/out" ]; then mkdir "$root/build/out"; fi
 [ -d "$root/build/out" ] && [ ! -L "$root/build/out" ] || die '输出根目录无效'
 run=$root/build/out/$run_id
-if [ "$kind" = desktop ]; then
+if [ "$kind" = desktop ] || [ "$kind" = windows ]; then
     # 桌面成品只读，包装独占新编号；不会调用原构建脚本或改变原应用签名。
     mkdir "$run" || die '运行编号已存在，请使用新编号'
-    printf '%s\n' displaykvm-desktop-v1 > "$run/.displaykvm-run"
+    if [ "$kind" = desktop ]; then
+        printf '%s\n' displaykvm-desktop-v1 > "$run/.displaykvm-run"
+    else
+        printf '%s\n' displaykvm-windows-v1 > "$run/.displaykvm-run"
+    fi
     mkdir "$run/tools" "$run/cache" "$run/cache/gomod" "$run/cache/build" "$run/cache/tmp"
 else
     [ -d "$run" ] && [ ! -L "$run" ] || die '核心运行目录不存在或为链接'
@@ -51,6 +67,8 @@ cd "$root"
 GOOS=$host_os GOARCH=$host_arch go build -mod=readonly -trimpath -buildvcs=false -o "$run/dist/notices" ./packaging/notices
 if [ "$kind" = desktop ]; then
     "$run/dist/notices" desktop --repo "$root" --run "$run" --app "$app"
+elif [ "$kind" = windows ]; then
+    "$run/dist/notices" windows --repo "$root" --run "$run" --app "$app" --core-run "$root/build/out/$core_run_id"
 else
     "$run/dist/notices" core --repo "$root" --run "$run"
 fi

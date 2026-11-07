@@ -15,7 +15,7 @@ displayKvm 用于管理和切换显示器输入源，包含 Go 命令行客户�
 
 以下 `go run` 示例用于源码开发。macOS 裸 `go run` 不会自动附带 `m1ddc`；程序不在 `.app` 内且未设置高级工具路径覆盖时，会报告缺少依赖。macOS 日常运行请优先构建下方的 `.app` 并使用其内嵌后台。源码高级路径覆盖见[完整使用说明](docs/usage/README.md)。
 
-从源码创建并检查设置文件，按实际设备和校准结果填写配置：
+从源码创建并检查设置文件，按实际设备和校准结果填写配置；文章参数的脱敏字段片段见[配置契约](docs/contracts.md#文章参数与绑定字段示例)：
 
 ```sh
 go run ./cmd/displaykvm config new --file '/absolute/settings.json'
@@ -68,9 +68,13 @@ desktop/bin/DisplayKvm.app/Contents/MacOS/displaykvm
 | macOS Apple Silicon | 提供 arm64 桌面候选，随包使用固定版本 `m1ddc v1.3.1`；本地桌面构建最低部署版本为 macOS 13。 |
 | macOS Intel | 显示器控制后端尚不可用。 |
 | Windows amd64 / arm64 | 使用系统原生显示器接口，无需另装显示器控制工具；已有核心及桌面交叉编译候选，最低候选基线为 Windows 10 1803（build 17134）。 |
-| Linux amd64 / arm64 | 核心可交叉编译；真实随包工具、依赖及许可载荷尚未完成交付。 |
+| Linux amd64 / arm64 | 原生生成与包装校验路径已有；双架构真实随包工具、依赖及许可载荷仍待生成和验收。 |
 
-Windows 仍依赖显示器开启 DDC/CI、链路及驱动允许访问，以及相关本地文件系统能力。WebView2、安装、权限、登录启动和显示器切换等尚未完成 Windows 实机验收。Windows 开机启动管理仍待实现。
+Windows 已实现标准 VCP 输入控制和当前用户登录启动。LG 特殊输入提交使用当前用户已安装的 AMD 驱动，当前仅 Windows amd64 支持这条特殊路径；它使用源地址 0x50 和私有命令 0xF4，不能替换为标准 VCP 0x60。驱动缺失、目标映射不唯一或身份校验失败时拒绝发送。Windows arm64 的标准路径与桌面候选保留，不能据此推断支持 AMD 特殊路径。
+
+macOS Apple Silicon 复用随包 m1ddc v1.3.1，按显示器 UUID 发送 input 或 input-alt，输入值使用十进制。Linux 候选要求原生生成的 ddcutil 3.0.2、systemd 258 相关工具、依赖库、完整源码和许可证；缺少任一架构载荷时，不得作为完整跨平台候选发布。
+
+Windows 仍依赖显示器开启 DDC/CI、线缆、扩展坞等链路及驱动允许访问，以及相关本地文件系统能力。WebView2、安装、权限、登录启动和显示器切换等尚未完成 Windows 实机验收。代码和定向测试通过不等于 Windows 原生运行或真实切屏通过；实际完成状态以[任务计划](docs/任务计划/【20261105-显示器切换工具开发】.md)和本轮验证证据为准。
 
 候选程序不是正式安装包。macOS 当前使用 ad-hoc 签名，未经公证；真实显示器、桌面 WebView 和非当前输入的 DDC/CI 能力仍需实机验证。完整边界见[兼容说明](docs/compatibility.md)。
 

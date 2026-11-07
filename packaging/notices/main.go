@@ -99,19 +99,24 @@ type nativeToolManifest struct {
 }
 
 type buildRecord struct {
-	Schema       int            `json:"schema_version"`
-	Toolchain    string         `json:"toolchain"`
-	VersionLabel string         `json:"archive_label"`
-	Binaries     []binaryRecord `json:"binaries"`
+	Schema              int            `json:"schema_version"`
+	Toolchain           string         `json:"toolchain"`
+	VersionLabel        string         `json:"archive_label"`
+	SourceRevision      string         `json:"source_revision,omitempty"`
+	SourceModified      bool           `json:"source_modified,omitempty"`
+	SourceContentSHA256 string         `json:"source_content_sha256,omitempty"`
+	Binaries            []binaryRecord `json:"binaries"`
+	LinuxPayloads       []licenseFile  `json:"linux_payloads,omitempty"`
 }
 
 type packageRecord struct {
-	Schema      int                `json:"schema_version"`
-	Label       string             `json:"archive_label"`
-	Status      string             `json:"status"`
-	App         map[string]string  `json:"app,omitempty"`
-	Binaries    []binaryRecord     `json:"binaries"`
-	NativeTools []nativeToolRecord `json:"native_tools,omitempty"`
+	Schema       int                   `json:"schema_version"`
+	Label        string                `json:"archive_label"`
+	Status       string                `json:"status"`
+	App          map[string]string     `json:"app,omitempty"`
+	Binaries     []binaryRecord        `json:"binaries"`
+	NativeTools  []nativeToolRecord    `json:"native_tools,omitempty"`
+	LinuxPayload *linuxPayloadManifest `json:"linux_payload,omitempty"`
 }
 
 type listModule struct {
@@ -145,13 +150,16 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return errors.New("缺少record-core、core或desktop模式")
+		return errors.New("缺少record-core、record-windows、core、desktop或windows模式")
 	}
 	flags := flag.NewFlagSet("notices", flag.ContinueOnError)
 	repoFlag := flags.String("repo", "", "项目根")
 	runFlag := flags.String("run", "", "本次独占目录")
 	version := flags.String("version", "", "归档标签，不注入程序版本")
-	app := flags.String("app", "", "既有macOS应用包")
+	app := flags.String("app", "", "既有macOS应用包或Windows桌面程序")
+	coreRun := flags.String("core-run", "", "Windows配套核心构建目录")
+	target := flags.String("target", "", "Windows桌面目标")
+	linuxRun := flags.String("linux-tools-run", "", "build/out下已完成的原生Linux工具目录")
 	if err := flags.Parse(os.Args[2:]); err != nil {
 		return err
 	}
@@ -183,6 +191,10 @@ func run() error {
 	expectedOwner := "displaykvm-core-v1\n"
 	if os.Args[1] == "desktop" {
 		expectedOwner = "displaykvm-desktop-v1\n"
+	} else if os.Args[1] == "record-windows" {
+		expectedOwner = "displaykvm-windows-build-v1\n"
+	} else if os.Args[1] == "windows" {
+		expectedOwner = "displaykvm-windows-v1\n"
 	}
 	if string(owner) != expectedOwner {
 		return errors.New("运行目录身份不匹配")
@@ -203,11 +215,26 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		return writeJSON(filepath.Join(runDir, "build.json"), buildRecord{1, toolchain, *version, binaries})
+		if err := stageLinux(runDir, *linuxRun, binaries); err != nil {
+			return err
+		}
+		linuxPayloads, err := linuxBuildRecords(runDir, binaries)
+		if err != nil {
+			return err
+		}
+		revision, modified, sourceHash, err := buildSource(repo)
+		if err != nil {
+			return err
+		}
+		return writeJSON(filepath.Join(runDir, "build.json"), buildRecord{Schema: 1, Toolchain: toolchain, VersionLabel: *version, SourceRevision: revision, SourceModified: modified, SourceContentSHA256: sourceHash, Binaries: binaries, LinuxPayloads: linuxPayloads})
+	case "record-windows":
+		return recordWindows(repo, runDir, *version, *target)
 	case "core":
 		return packageCore(repo, runDir)
 	case "desktop":
 		return packageDesktop(repo, runDir, *app)
+	case "windows":
+		return packageWindows(repo, runDir, *app, *coreRun)
 	default:
 		return errors.New("未知模式")
 	}
@@ -775,6 +802,13 @@ func packageCore(repo, runDir string) error {
 	if build.Schema != 1 || build.Toolchain != toolchain || !validLabel(build.VersionLabel) || !reflect.DeepEqual(build.Binaries, actual) {
 		return errors.New("核心构建记录与实际二进制不一致")
 	}
+	linuxPayloads, err := linuxBuildRecords(runDir, actual)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(build.LinuxPayloads, linuxPayloads) {
+		return errors.New("Linux原生载荷与核心构建记录不一致")
+	}
 	var archives []archiveRecord
 	for i := 0; i < len(actual); i += 2 {
 		target := actual[i].GOOS + "-" + actual[i].GOARCH
@@ -802,7 +836,13 @@ func packageCore(repo, runDir string) error {
 				return err
 			}
 		}
-		manifest := packageRecord{Schema: 1, Label: build.VersionLabel, Status: "candidate; source versions are actual build info; runtime/signing/hardware not verified", Binaries: records}
+		manifest := packageRecord{Schema: 1, Label: build.VersionLabel, Status: "candidate; source versions are actual build info; runtime/signing/hardware not verified", App: map[string]string{"source_revision": build.SourceRevision, "source_modified": fmt.Sprint(build.SourceModified), "source_content_sha256": build.SourceContentSHA256, "target": target}, Binaries: records}
+		if actual[i].GOOS == "linux" {
+			manifest.LinuxPayload, err = packageLinux(filepath.Join(runDir, "linux", actual[i].GOARCH), payload, actual[i].GOARCH)
+			if err != nil {
+				return err
+			}
+		}
 		if err := finishPayload(payload, manifest); err != nil {
 			return err
 		}
@@ -1163,6 +1203,12 @@ func packageDesktop(repo, runDir, app string) error {
 		}
 	}
 	appInfo := map[string]string{"bundle_version": plist["CFBundleVersion"], "short_version": plist["CFBundleShortVersionString"], "minimum_macos_declaration": plist["LSMinimumSystemVersion"], "bundle_id": plist["CFBundleIdentifier"], "signing": "codesign strict verified for all four programs and app before/after copy; local ad-hoc only, developer identity/notarization not verified"}
+	// 包装来源记录独立于已签名app，不改写plist或产品运行时版本。
+	revision, modified, sourceHash, err := buildSource(repo)
+	if err != nil {
+		return err
+	}
+	appInfo["target"], appInfo["source_revision"], appInfo["source_modified"], appInfo["source_content_sha256"] = "darwin-arm64", revision, fmt.Sprint(modified), sourceHash
 	manifest := packageRecord{Schema: 1, Label: plist["CFBundleShortVersionString"], Status: "candidate; native runtime/notarization/hardware not verified", App: appInfo, Binaries: records, NativeTools: tools}
 	if err := finishPayload(payload, manifest); err != nil {
 		return err

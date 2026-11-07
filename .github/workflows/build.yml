@@ -1,40 +1,292 @@
-name: 手动构建候选产物
+name: 构建候选与显式发布
 
 "on":
   workflow_dispatch:
+    inputs:
+      version:
+        description: 归档标签（字母数字开头，至多64字符）
+        required: true
+        default: 0.0.1-candidate
+        type: string
+      publish:
+        description: 完整候选全部成功后发布到已存在的标签
+        default: false
+        type: boolean
+      release_tag:
+        description: 发布标签（仅publish=true必填，必须指向本次检出的提交）
+        default: ''
+        type: string
+  push:
+    tags: ['v*']
 
 permissions:
   contents: read
 
+concurrency:
+  group: candidate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GOENV: 'off'
+  GOWORK: 'off'
+  GOTOOLCHAIN: local
+  GOFLAGS: '-mod=readonly'
+  # 与desktop/go.mod现有锁定版本一致；显式预取阶段结束后构建入口统一离线。
+  DESKTOP_MODULES: github.com/wailsapp/wails/v3@v3.1.0 github.com/coder/websocket@v1.8.15 github.com/ebitengine/purego@v0.11.3 github.com/go-ole/go-ole@v1.3.0 github.com/godbus/dbus/v5@v5.2.4 golang.org/x/sys@v0.49.0 golang.org/x/term@v0.47.0
+
 jobs:
-  core:
-    runs-on: macos-26
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [darwin-amd64, darwin-arm64, linux-amd64, linux-arm64, windows-amd64, windows-arm64]
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+      commit: ${{ steps.identity.outputs.commit }}
+      publish: ${{ steps.identity.outputs.publish }}
+      tag: ${{ steps.identity.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: 固定来源、归档标签及显式发布条件
+        id: identity
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          commit=$(git rev-parse HEAD)
+          publish=false
+          tag=
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]; then
+            version=$GITHUB_REF_NAME
+            tag=$GITHUB_REF_NAME
+            publish=true
+          else
+            version=$INPUT_VERSION
+            if [ "$INPUT_PUBLISH" = true ]; then
+              [ -n "$INPUT_TAG" ] || { echo '显式发布必须提供已存在的release_tag' >&2; exit 1; }
+              tag=$INPUT_TAG
+              publish=true
+            fi
+          fi
+          case "$version" in [A-Za-z0-9]*) ;; *) echo '版本标签无效' >&2; exit 1 ;; esac
+          case "$version" in *[!A-Za-z0-9._-]*) echo '版本标签含非法字符' >&2; exit 1 ;; esac
+          [ "${#version}" -le 64 ]
+          if [ "$publish" = true ]; then
+            git check-ref-format "refs/tags/$tag"
+            [ "$(git rev-parse --verify "refs/tags/$tag^{commit}")" = "$commit" ] || { echo '发布标签不指向本次来源' >&2; exit 1; }
+          fi
+          printf 'version=%s\ncommit=%s\npublish=%s\ntag=%s\n' "$version" "$commit" "$publish" "$tag" >> "$GITHUB_OUTPUT"
+
+  linux-tools:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    # 固定官方Debian12多架构index；各runner原生运行对应镜像，不以QEMU替代。
+    container:
+      image: debian:12-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc
+    env:
+      TOOLS_RUN_ID: ci-tools-${{ github.run_id }}-${{ github.run_attempt }}
+      BUILD_ARCH: ${{ matrix.arch }}
+    steps:
+      - name: 隔离容器显式准备R6工具与官方deb-src索引
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(dpkg --print-architecture)" = "$BUILD_ARCH"
+          test -f /etc/apt/sources.list.d/debian.sources
+          sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/debian.sources
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git build-essential autoconf automake libtool pkg-config \
+            meson ninja-build gperf python3 python3-jinja2 patchelf binutils dpkg-dev apt \
+            gzip xz-utils tar libglib2.0-dev libjansson-dev libacl1-dev libdrm-dev \
+            libcap-dev libmount-dev libblkid-dev libcrypt-dev
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - name: 原生生成并严格验证固定版本、来源与许可
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 生成器精确依赖或APT来源缺失即失败；不降级成调用宿主工具的轻包。
+          python3 build/linux/bundle.py generate --arch "$BUILD_ARCH" --run-id "$TOOLS_RUN_ID" --jobs 2
+          python3 build/ci-artifacts.py pack-linux --arch "$BUILD_ARCH" --run-id "$TOOLS_RUN_ID" --output "ci-transfer/linux-tools-$BUILD_ARCH.tar"
+      - name: 保存原生载荷（tar保留执行位）
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-tools-${{ matrix.arch }}
+          path: ci-transfer/linux-tools-${{ matrix.arch }}.tar
+          if-no-files-found: error
+          retention-days: 14
+      - name: 保留失败现场日志
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-tools-failure-${{ matrix.arch }}
+          path: build/out/${{ env.TOOLS_RUN_ID }}/work/**/build.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows-native:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: windows-2025
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          architecture: ${{ matrix.arch }}
+          check-latest: false
+          cache: false
+      - name: 原生Windows无屏产品测试
+        shell: pwsh
+        env:
+          BUILD_ARCH: ${{ matrix.arch }}
+          CGO_ENABLED: '0'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((go env GOHOSTOS) -ne 'windows' -or (go env GOHOSTARCH) -ne $env:BUILD_ARCH) { throw '必须使用对应架构的原生Windows工具链' }
+          if ((go env GOVERSION) -ne 'go1.27.3') { throw '工具链版本不符' }
+          # PowerShell生成Windows绝对缓存路径；不复用Git Bash的/c/...路径。
+          $env:GOMODCACHE = Join-Path $env:GITHUB_WORKSPACE 'desktop/.cache/gomod'
+          $env:GOCACHE = Join-Path $env:GITHUB_WORKSPACE 'desktop/.cache/build'
+          $env:GOTMPDIR = Join-Path $env:GITHUB_WORKSPACE 'desktop/.cache/tmp'
+          New-Item -ItemType Directory -Force $env:GOMODCACHE, $env:GOCACHE, $env:GOTMPDIR | Out-Null
+          $env:GOPROXY = 'https://proxy.golang.org'
+          $env:GOSUMDB = 'sum.golang.org'
+          $modules = $env:DESKTOP_MODULES -split ' '
+          go -C desktop mod download @modules
+          if ($LASTEXITCODE -ne 0) { throw '锁定依赖预取失败' }
+          $env:GOPROXY = 'off'
+          $env:GOSUMDB = 'off'
+          go test ./cmd/... ./internal/... -count=1
+          if ($LASTEXITCODE -ne 0) { throw 'Windows核心测试失败' }
+          go -C desktop test ./... -count=1
+          if ($LASTEXITCODE -ne 0) { throw 'Windows桌面无屏测试失败' }
+
+  core:
+    # 缺任一Linux原生物料或Windows原生测试失败，完整六平台候选不能开始。
+    needs: [prepare, linux-tools, windows-native]
+    runs-on: macos-26
+    env:
+      BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+      BUILD_RUN_ID: ci-core-${{ github.run_id }}-${{ github.run_attempt }}
+      TOOLS_RUN_ID: ci-tools-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.27.3'
           check-latest: false
           cache: false
-      - name: 离线交叉构建与许可包装
-        env:
-          BUILD_TARGET: ${{ matrix.target }}
-          BUILD_RUN_ID: ci-core-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: linux-tools-*
+          path: ci-input/linux
+          merge-multiple: true
+      - name: 合并身份与双架构载荷，再构建及许可包装
         run: |
-          sh build/build-core.sh --target "$BUILD_TARGET" --version 0.0.1-dev --run-id "$BUILD_RUN_ID"
+          set -eu
+          python3 build/ci-artifacts.py merge-linux --run-id "$TOOLS_RUN_ID" --artifacts ci-input/linux
+          sh build/build-core.sh --target all --version "$BUILD_VERSION" --run-id "$BUILD_RUN_ID" --linux-tools-run-id "$TOOLS_RUN_ID"
           sh packaging/package.sh core --run-id "$BUILD_RUN_ID"
+      - name: 六平台可下载归档及摘要
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: candidate-core
+          path: |
+            build/out/${{ env.BUILD_RUN_ID }}/dist/*.tar.gz
+            build/out/${{ env.BUILD_RUN_ID }}/dist/*.zip
+            build/out/${{ env.BUILD_RUN_ID }}/dist/*.sha256
+            build/out/${{ env.BUILD_RUN_ID }}/dist/archives.json
+          if-no-files-found: error
+          retention-days: 30
 
-  desktop-macos-arm64:
+  desktop-windows:
+    needs: [prepare, core]
     runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    env:
+      BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+      BUILD_ARCH: ${{ matrix.arch }}
+      CORE_RUN_ID: ci-wincore-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+      GUI_RUN_ID: ci-wingui-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+      PACKAGE_RUN_ID: ci-winzip-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.3'
+          check-latest: false
+          cache: false
+      - name: 显式预取锁定桌面依赖
+        run: |
+          set -eu
+          export GOMODCACHE="$PWD/desktop/.cache/gomod" GOCACHE="$PWD/desktop/.cache/build"
+          export GOTMPDIR="$PWD/desktop/.cache/tmp" TMPDIR="$PWD/desktop/.cache/tmp"
+          export GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org
+          mkdir -p "$GOMODCACHE" "$GOCACHE" "$GOTMPDIR"
+          go -C desktop mod download $DESKTOP_MODULES
+      - name: 两角色核心、真实Windows GUI与三程序ZIP
+        run: |
+          set -eu
+          sh build/build-core.sh --target "windows-$BUILD_ARCH" --version "$BUILD_VERSION" --run-id "$CORE_RUN_ID"
+          sh build/build-windows.sh --target "windows-$BUILD_ARCH" --version "$BUILD_VERSION" --run-id "$GUI_RUN_ID"
+          sh packaging/package.sh windows --run-id "$PACKAGE_RUN_ID" --app "build/out/$GUI_RUN_ID/displaykvm.exe" --core-run-id "$CORE_RUN_ID"
+      - name: Windows可下载ZIP及摘要
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: candidate-windows-${{ matrix.arch }}
+          path: |
+            build/out/${{ env.PACKAGE_RUN_ID }}/dist/*.zip
+            build/out/${{ env.PACKAGE_RUN_ID }}/dist/*.sha256
+            build/out/${{ env.PACKAGE_RUN_ID }}/dist/archives.json
+          if-no-files-found: error
+          retention-days: 30
+
+  desktop-macos-arm64:
+    needs: [prepare, core]
+    runs-on: macos-26
+    env:
+      BUILD_RUN_ID: ci-desktop-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -43,16 +295,66 @@ jobs:
           cache: false
       - name: 确认原生arm64并显式预取锁定依赖
         run: |
+          set -eu
           test "$(uname -m)" = arm64
-          export GOENV=off GOWORK=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly
           export GOMODCACHE="$PWD/desktop/.cache/gomod" GOCACHE="$PWD/desktop/.cache/build"
           export GOTMPDIR="$PWD/desktop/.cache/tmp" TMPDIR="$PWD/desktop/.cache/tmp"
           export GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org
           mkdir -p "$GOMODCACHE" "$GOCACHE" "$GOTMPDIR"
-          go -C desktop mod download github.com/wailsapp/wails/v3@v3.1.0 github.com/coder/websocket@v1.8.15 github.com/ebitengine/purego@v0.11.3 github.com/go-ole/go-ole@v1.3.0 github.com/godbus/dbus/v5@v5.2.4 golang.org/x/sys@v0.49.0 golang.org/x/term@v0.47.0
+          go -C desktop mod download $DESKTOP_MODULES
       - name: 原生桌面构建与只读成品包装
-        env:
-          BUILD_RUN_ID: ci-desktop-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
+          set -eu
           sh desktop/build-macos.sh
           sh packaging/package.sh desktop --app desktop/bin/DisplayKvm.app --run-id "$BUILD_RUN_ID"
+      - name: 保留macOS arm64 GUI候选
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: candidate-macos-arm64
+          path: |
+            build/out/${{ env.BUILD_RUN_ID }}/dist/*.tar.gz
+            build/out/${{ env.BUILD_RUN_ID }}/dist/*.sha256
+            build/out/${{ env.BUILD_RUN_ID }}/dist/archives.json
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    needs: [prepare, core, desktop-windows, desktop-macos-arm64]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    # 写权限只给予全部门控通过后的发布job；构建和测试仅可读仓库。
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: candidate-*
+          path: ci-candidates
+      - name: 要求全部九份候选并复核归档摘要
+        run: python3 build/ci-artifacts.py collect-release --version "$BUILD_VERSION" --artifacts ci-candidates --output ci-release
+      - name: 保存通过发布前校验的下载材料
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-candidates
+          path: ci-release/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: 官方CLI创建草稿并上传成功后发布候选
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 不覆盖既有Release；上传失败保留草稿及job错误，避免伪称发布成功。
+          # --verify-tag禁止CLI隐式创建标签；普通手动构建不会进入本job。
+          gh release create "$RELEASE_TAG" ci-release/*.zip ci-release/*.tar.gz ci-release/*.sha256 \
+            --verify-tag --draft --prerelease --title "$RELEASE_TAG" --notes-file ci-release/RELEASE-NOTES.txt
+          gh release edit "$RELEASE_TAG" --draft=false

@@ -1,6 +1,6 @@
 # DisplayKvm Windows 候选程序
 
-本候选集包含桌面界面、后台和命令行程序，amd64 与 arm64 分别提供，按 Windows 系统架构选择。
+本候选集包含桌面界面、后台和命令行程序，amd64 与 arm64 分别提供，按 Windows 系统架构选择。候选包名为 `displaykvm-desktop-<version>-windows-<arch>.zip`；实际工件与下载状态见[发布记录](../releases.md)。
 
 ## 运行条件
 
@@ -10,19 +10,23 @@ Windows 10 1803（OS build 17134）及以后。本地文件系统须支持配置
 
 ## 文件布局
 
-DisplayKvm.exe 为桌面界面，displaykvmd.exe 为后台，core/displaykvm.exe 为命令行。请完整解压后使用。桌面通过同一用户配置环境中的端点连接后台，当前不会自动启动后台。
+`displaykvm.exe`：桌面界面；`displaykvmd.exe`：后台；`displaykvm-cli.exe`：命令行。三者位于同一目录，必须来自同一个版本、架构和源码构建。核心包中原有的 `displaykvm.exe` 是命令行，复制进入桌面候选时更名为 `displaykvm-cli.exe`；不要用核心包中的同名文件覆盖桌面界面。Windows 文件名大小写不敏感，不能以大小写区分桌面与命令行程序。
+
+解压到同一受支持的本地目录，保留三程序及许可证、清单和校验文件。桌面通过同一用户配置环境中的端点连接后台。
 
 ## 手动启动
 
-准备一份完整的 displaykvm-settings/v1 设置文件。在解压目录打开 PowerShell，将示例替换为该文件在本机的绝对路径：
+准备一份完整的 displaykvm-settings/v1 设置文件；文章参数仅作字段示例，见[配置契约](../contracts.md#文章参数与绑定字段示例)。在解压目录打开 PowerShell，将示例替换为该文件在本机的绝对路径：
 
 ```powershell
 .\displaykvmd.exe -settings 'C:\path\displaykvm-settings.json'
 ```
 
-保持后台运行，再从资源管理器打开 DisplayKvm.exe。两者使用同一 Windows 用户。退出桌面不会停止后台；需要停止后台时，在启动它的终端按 Ctrl+C。
+手动验证时先启动 `displaykvmd.exe`，保持后台运行，再从资源管理器打开 `displaykvm.exe`。两者使用同一 Windows 用户。退出桌面不会停止后台；需要停止后台时，在启动它的终端按 Ctrl+C。
 
-Windows 开机启动管理尚未实现，本候选采用手动启动。
+登录启动由用户在现有启动设置中分别启用后台和桌面。该功能在当前用户登录后生效，不是登录前系统服务，也不意味着桌面程序会自动拉起后台。
+
+登录项使用当前用户的 HKCU Run，只管理本应用值。路径或文件身份不符合安全校验时会拒绝设置；请保留原始文件布局。Windows 原生登录行为、驱动、WebView2、睡眠唤醒与真实硬件仍需实机验收。
 
 ## 验证范围
 

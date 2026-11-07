@@ -1,4 +1,4 @@
-//go:build !darwin
+//go:build !darwin && !windows
 
 package loginstart
 
@@ -16,6 +16,8 @@ func unsupported() error {
 }
 
 func platformAvailable() error { return unsupported() }
+
+func platformIdentity() error { return unsupported() }
 
 func openSourceFile(string) (*os.File, error) { return nil, unsupported() }
 

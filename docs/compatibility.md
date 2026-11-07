@@ -6,10 +6,12 @@
 | --- | --- | --- |
 | macOS Apple Silicon | 随包 `m1ddc v1.3.1` 传输，仅限Apple Silicon，使用CoreDisplay私有API；现有桌面本地包构建下限为macOS 13 | 缺具体显示器链路实测；构建下限不是完整支持声明 |
 | macOS Intel | 显示器控制后端当前不适用；桌面构建仍为候选 | 未验证 |
-| Linux amd64/arm64 | 计划随包提供ddcutil/busctl/udevadm；当前未生成或验收amd64/arm64真实载荷，Linux客户端尚未完成 | 未完成这些架构的本机安装运行或硬件验收 |
+| Linux amd64/arm64 | 已有ddcutil/busctl/udevadm原生生成与包装校验路径，固定Debian12/glibc2.36生成基线；当前未生成或验收amd64/arm64真实载荷及两架构依赖闭包，不能泛称所有发行版可用 | 未完成这些架构的本机安装运行或硬件验收 |
 | Windows amd64/arm64 | user32/dxva2原生后端可枚举、读取当前输入并按配置切换VCP 0x60，无需外部显示控制工具；启动前置包括设置写锁及IPC私有权限/单实例保护 | 主机七包回归、六份双架构专测编译、六个程序构建及带许可ZIP核验通过；exe均未运行，真实系统及硬件未验证 |
 
-Windows已加入原生实现；原生后端、工具就绪解析器（Resolver）、IPC及设置写锁均完成独立静态审查，已发现的关键问题（Critical/Important）均已闭合，无待处理项。设计与实施边界见[本轮设计](superpowers/specs/2026-11-07-windows-display-design.md)和[实施计划](superpowers/plans/2026-11-07-windows-display.md)。
+软件定向验证已覆盖标准协议与 LG 特殊提交的边界，Windows 原生 API、AMD 驱动、双架构桌面运行及真实设备仍须最终验证。标准 VCP 支持、AMD 特殊支持和实际链路可用性分别判断。既有原生接入的设计与实施边界见[本轮设计](superpowers/specs/2026-11-07-windows-display-design.md)和[实施计划](superpowers/plans/2026-11-07-windows-display.md)。
+
+Windows 的 AMD LG 特殊路径仅限 amd64，要求已安装的 AMD 驱动、稳定物理映射及 EDID 唯一匹配；无法确认目标时拒绝写入。arm64、NVIDIA、Intel 不承诺此特殊功能，标准 VCP 路径独立判断。
 
 主机七包回归返回码0、7包通过：427个叶测试通过、1个叶测试跳过、66个父级测试通过，无失败；父级与叶测试不合并计数，先前原生后端诊断失败项已通过。证据见[主机结果](verification/2026-11-07-windows-display/host-results.json)及[命令元数据](verification/2026-11-07-windows-display/host-tests.meta.json)。原生后端、IPC、设置专测共六份Windows amd64/arm64测试编译及三入口双架构共六个程序构建均返回码0，见[两包测试编译](verification/2026-11-07-windows-display/native-ipc-windows-builds.results.json)与[后续构建](verification/2026-11-07-windows-display/program-builds.results.json)。最终带许可ZIP及完整哈希见[本轮摘要](verification/2026-11-07-windows-display/summary.md)，手动运行见[候选说明](usage/windows-candidate.md)。exe均未运行；主机注入API测试与交叉编译不等于Windows运行验证，真实ACL、锁、端点替换、启动、DDC/CI、桌面、WebView2及安装均未实机验证。
 
@@ -19,11 +21,11 @@ Windows仅在显示源与目标、设备路径和物理显示器可唯一关联�
 
 Windows不探测m1ddc/ddcutil/busctl/udevadm，也不清空完整配置文档中已有的跨平台Runtime绝对路径；相对路径和NUL字符校验仍保留。
 
-ddcutil保留2.2.7解析基线及3.0.2格式适配；3.0.2的模拟用例依据官方源码格式构造，版本响应、写入回执及底层驱动行为仍需Linux实机确认。macOS arm64随包工具固定为m1ddc v1.3.1，命令契约的静态核对不能替代显示器实测。
+ddcutil保留2.2.7解析基线及3.0.2格式适配；3.0.2的模拟用例依据官方源码格式构造，版本响应、写入回执及底层驱动行为仍需Linux实机确认。macOS Apple Silicon随包工具固定为m1ddc v1.3.1，不自动升级，按UUID选择显示器，LG路径使用input-alt；不能因旧文章中的M4失败记录断言当前路径失败，也不能以新源码或命令契约的静态核对断言实机通过。
 
 Linux宿主仍需I2C驱动/权限及D-Bus/logind/udev设施，不自动安装服务或更改权限。真实载荷尚未生成或验收，构建契约见[Linux随包工具构建契约](development/linux-bundled-tools.md)。
 
-操作系统版本、显示器品牌、接口类型或工具版本本身均不足以证明兼容。USB/扩展坞/转接器等实际链路需要分别记录；不要套用其他型号的输入代码。
+操作系统版本、显示器品牌、接口类型或工具版本本身均不足以证明兼容。USB/扩展坞/转接器等实际链路需要分别记录；不要套用其他型号的输入代码。所有平台在未选中输入时是否仍可控制，由实际显示器与连接决定；用户已有Windows脚本经验不是本项目当前实现的验收证据。
 
 ## 证据等级
 
