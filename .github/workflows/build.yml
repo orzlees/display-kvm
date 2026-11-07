@@ -228,13 +228,16 @@ jobs:
             }
             $hadTemp = Test-Path Env:TEMP
             $hadTmp = Test-Path Env:TMP
+            $hadGoTmpDir = Test-Path Env:GOTMPDIR
             $originalTemp = [Environment]::GetEnvironmentVariable('TEMP', 'Process')
             $originalTmp = [Environment]::GetEnvironmentVariable('TMP', 'Process')
+            $originalGoTmpDir = [Environment]::GetEnvironmentVariable('GOTMPDIR', 'Process')
             $testTempCreated = $false
             $testsSucceeded = $false
             try {
               $stepPhase = 'preflight-create'
-              # GOTMPDIR只管理编译临时文件；runner默认TEMP的祖先可能具有危险写入权限。
+              # Go 1.27.3的t.TempDir也优先读取GOTMPDIR；只改TEMP/TMP仍会落入workspace缓存路径。
+              # 三者须在测试前统一到本次GUID根，runner默认临时目录的祖先可能具有危险写入权限。
               # 仅为本步骤的测试及子进程选择当前账户LocalAppData，不修改账户配置或任何ACL。
               # 这里只检查目录身份，完整祖先安全策略仍由原生settingslock测试的生产入口执行。
               $localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
@@ -308,6 +311,7 @@ jobs:
               }
               $env:TEMP = $testTempRoot
               $env:TMP = $testTempRoot
+              $env:GOTMPDIR = $testTempRoot
               # 非零退出由下面显式处理，避免原生命令错误偏好提前打断输出捕获；
               # Tee只复制stdout/stderr，不改变测试参数，退出码须立即保存，失败不继续desktop。
               $PSNativeCommandUseErrorActionPreference = $false
@@ -342,7 +346,8 @@ jobs:
             } finally {
               $stepPhase = 'cleanup'
               $stepReason = 'unknown'
-              # 还原本进程原值，也区分原本未定义；恢复或清理错误不能覆盖测试的原始失败退出码。
+              # 逐一还原TEMP/TMP/GOTMPDIR的本进程原值，也区分原本未定义；
+              # 恢复或清理错误不能覆盖测试的原始失败退出码。
               $restoreFailed = $false
               try {
                 if ($hadTemp) { $env:TEMP = $originalTemp }
@@ -357,6 +362,13 @@ jobs:
               } catch {
                 $restoreFailed = $true
                 Write-Host '::warning::无法恢复本步骤TMP进程变量。'
+              }
+              try {
+                if ($hadGoTmpDir) { $env:GOTMPDIR = $originalGoTmpDir }
+                else { [Environment]::SetEnvironmentVariable('GOTMPDIR', $null, 'Process') }
+              } catch {
+                $restoreFailed = $true
+                Write-Host '::warning::无法恢复本步骤GOTMPDIR进程变量。'
               }
               if ($testsSucceeded -and $testTempCreated -and -not $restoreFailed) {
                 try {
@@ -380,7 +392,7 @@ jobs:
               }
               if ($restoreFailed -and $testsSucceeded) {
                 $stepReason = 'temp-restore-failed'
-                throw '无法恢复本步骤TEMP/TMP进程变量'
+                throw '无法恢复本步骤TEMP/TMP/GOTMPDIR进程变量'
               }
             }
           } catch {
