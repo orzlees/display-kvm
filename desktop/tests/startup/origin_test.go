@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -40,15 +41,16 @@ func TestNativeOriginSaveReachesBackendAfterWailsURLNormalization(t *testing.T) 
 func TestNativeOriginAndRefererFilePickerReachesPickerWithoutSaving(t *testing.T) {
 	for _, source := range []string{"Origin与Referer", "仅Referer"} {
 		t.Run(source, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.json")
 			backend := &memoryBackend{state: initialState()}
 			picks := 0
-			backend.documents = map[string]settings.Snapshot{"/chosen/config.json": unifiedSnapshot("/chosen/config.json", "read")}
+			backend.documents = map[string]settings.Snapshot{path: unifiedSnapshot(path, "read")}
 			handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Open: func(_ context.Context, field string) (string, bool, error) {
 				picks++
 				if field != "config" {
 					t.Errorf("选择目标错误：%s", field)
 				}
-				return "/chosen/config.json", false, nil
+				return path, false, nil
 			}})
 			values := form(t, get(t, handler))
 			values.Set("action", "choose_config")
@@ -62,7 +64,7 @@ func TestNativeOriginAndRefererFilePickerReachesPickerWithoutSaving(t *testing.T
 			if response.Code != http.StatusOK || picks != 1 || len(backend.saves) != 0 {
 				t.Fatalf("原生来源选择器未到达或意外保存：status=%d picks=%d saves=%d", response.Code, picks, len(backend.saves))
 			}
-			requireText(t, response, `/chosen/config.json`)
+			requireText(t, response, path)
 			requireText(t, response, `name="desktop_enabled" value="1" checked`)
 		})
 	}

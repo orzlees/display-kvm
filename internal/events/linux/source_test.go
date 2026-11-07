@@ -3,6 +3,7 @@ package linux
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,8 +45,10 @@ func (f fakeRunner) start(c context.Context, p string, a []string, m readyMode) 
 	return f.startFn(c, p, a, m)
 }
 
-func testSource(r commandRunner) *Source {
-	s := NewSource(Config{UdevadmPath: "/fixture/udevadm"})
+func testSource(t *testing.T, r commandRunner) *Source {
+	t.Helper()
+	// 模拟Linux不改变宿主路径规则，合法工具夹具须通过真实绝对路径校验才能进入替身回调。
+	s := NewSource(Config{UdevadmPath: filepath.Join(t.TempDir(), "udevadm")})
 	s.runner, s.platform = r, "linux"
 	s.infrastructure = func() error { return nil }
 	s.pause = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
@@ -93,7 +96,7 @@ func TestCapabilitiesMissingPermissionAndUnsupported(t *testing.T) {
 	f := newFakeSubscription()
 	r := usbRunner(f, func(context.Context) ([]byte, error) { return nil, nil })
 	r.startFn = func(context.Context, string, []string, readyMode) (subscription, error) { return nil, denied }
-	s := testSource(r)
+	s := testSource(t, r)
 	caps, err := s.Capabilities(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -118,7 +121,7 @@ func TestCapabilitiesMissingPermissionAndUnsupported(t *testing.T) {
 
 func TestSnapshotFixedBaselineAndCancellation(t *testing.T) {
 	f := newFakeSubscription()
-	s := testSource(usbRunner(f, func(context.Context) ([]byte, error) { return []byte(usbDatabase), nil }))
+	s := testSource(t, usbRunner(f, func(context.Context) ([]byte, error) { return []byte(usbDatabase), nil }))
 	ctx, cancel := context.WithCancel(context.Background())
 	out := make(chan model.Event, 2)
 	done := make(chan error, 1)
@@ -172,7 +175,7 @@ func TestSnapshotWaitScanFailureAndContext(t *testing.T) {
 	f := newFakeSubscription()
 	entered, release := make(chan struct{}), make(chan struct{})
 	scanErr := model.NewError(model.CodeIO, "数据库读取失败", nil)
-	s := testSource(usbRunner(f, func(ctx context.Context) ([]byte, error) {
+	s := testSource(t, usbRunner(f, func(ctx context.Context) ([]byte, error) {
 		close(entered)
 		select {
 		case <-release:
@@ -207,7 +210,7 @@ func TestSnapshotWaitScanFailureAndContext(t *testing.T) {
 
 func TestSnapshotReconcilesBufferedUSBAndNoSyntheticEvent(t *testing.T) {
 	f := newFakeSubscription()
-	s := testSource(usbRunner(f, func(context.Context) ([]byte, error) {
+	s := testSource(t, usbRunner(f, func(context.Context) ([]byte, error) {
 		for _, line := range []string{"UDEV [1] add /devices/usb1/1-3 (usb)", "ACTION=add", "DEVPATH=/devices/usb1/1-3", "SUBSYSTEM=usb", "DEVTYPE=usb_device", "PRODUCT=abcd/ef01/1", ""} {
 			f.lines <- line
 		}
@@ -240,7 +243,7 @@ func TestScanWaitsForRealSubscriptionReadyAndPermissionFailure(t *testing.T) {
 		close(started)
 		return f, nil
 	}
-	s := testSource(r)
+	s := testSource(t, r)
 	done := make(chan error, 1)
 	go func() { done <- s.Run(context.Background(), make(chan model.Event)) }()
 	<-started
@@ -265,7 +268,7 @@ func TestScanWaitsForRealSubscriptionReadyAndPermissionFailure(t *testing.T) {
 
 func TestConfirmedEmptySnapshot(t *testing.T) {
 	f := newFakeSubscription()
-	s := testSource(usbRunner(f, func(context.Context) ([]byte, error) { return nil, nil }))
+	s := testSource(t, usbRunner(f, func(context.Context) ([]byte, error) { return nil, nil }))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- s.Run(ctx, make(chan model.Event)) }()
@@ -307,7 +310,7 @@ func TestLogindUsesOnlySystemBusAndVerifiesTargetSession(t *testing.T) {
 			return f, nil
 		},
 	}
-	s := NewSource(Config{BusctlPath: "/fixture/busctl", SessionID: "c1"})
+	s := NewSource(Config{BusctlPath: filepath.Join(t.TempDir(), "busctl"), SessionID: "c1"})
 	s.runner, s.platform, s.uid = r, "linux", 1000
 	ctx, cancel := context.WithCancel(context.Background())
 	out, done := make(chan model.Event, 4), make(chan error, 1)
@@ -368,7 +371,7 @@ func TestReconnectCleansOldRoundAndWaitsNewReady(t *testing.T) {
 		close(secondStarted)
 		return second, nil
 	}
-	s := testSource(r)
+	s := testSource(t, r)
 	s.pause = func(ctx context.Context, _ time.Duration) error {
 		close(paused)
 		select {
@@ -430,7 +433,7 @@ func TestReconnectBudgetIsFinite(t *testing.T) {
 			return f, nil
 		},
 	}
-	s := testSource(r)
+	s := testSource(t, r)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
@@ -472,7 +475,7 @@ func TestExplicitMissingSessionSnapshotIsFalseRatherThanUnknown(t *testing.T) {
 		},
 		startFn: func(context.Context, string, []string, readyMode) (subscription, error) { return f, nil },
 	}
-	s := NewSource(Config{BusctlPath: "/fixture/busctl", SessionID: "not-present"})
+	s := NewSource(Config{BusctlPath: filepath.Join(t.TempDir(), "busctl"), SessionID: "not-present"})
 	s.runner, s.platform, s.uid = r, "linux", 1000
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

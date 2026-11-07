@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path/filepath"
 	"testing"
 )
 
@@ -94,12 +95,18 @@ func TestStartupBridgePendingDialogRejectsDuplicateAndHonorsRequestCancellation(
 }
 
 func TestApplicationPathUsesBundleAndPreservesDevelopmentCandidate(t *testing.T) {
+	root := t.TempDir()
+	applicationBundle := filepath.Join(root, "Applications", "DisplayKvm.app")
+	userBundle := filepath.Join(root, "Users", "test", "Applications", "Display Kvm.app")
+	buildBundle := filepath.Join(root, "workspace", "build", "DisplayKvm.app")
+	developmentExecutable := filepath.Join(root, "workspace", "desktop", "DisplayKVM")
+	nonBundleExecutable := filepath.Join(root, "workspace", "not-an-app", "Contents", "MacOS", "DisplayKVM")
 	for _, tt := range []struct{ executable, want string }{
-		{"/Applications/DisplayKvm.app/Contents/MacOS/DisplayKVM", "/Applications/DisplayKvm.app"},
-		{"/Users/test/Applications/Display Kvm.app/Contents/MacOS/DisplayKVM", "/Users/test/Applications/Display Kvm.app"},
-		{"/workspace/build/DisplayKvm.app/Contents/MacOS/DisplayKVM", "/workspace/build/DisplayKvm.app"},
-		{"/workspace/desktop/DisplayKVM", "/workspace/desktop/DisplayKVM"},
-		{"/workspace/not-an-app/Contents/MacOS/DisplayKVM", "/workspace/not-an-app/Contents/MacOS/DisplayKVM"},
+		{filepath.Join(applicationBundle, "Contents", "MacOS", "DisplayKVM"), applicationBundle},
+		{filepath.Join(userBundle, "Contents", "MacOS", "DisplayKVM"), userBundle},
+		{filepath.Join(buildBundle, "Contents", "MacOS", "DisplayKVM"), buildBundle},
+		{developmentExecutable, developmentExecutable},
+		{nonBundleExecutable, nonBundleExecutable},
 	} {
 		if got := applicationPath(tt.executable); got != tt.want {
 			t.Errorf("包路径错误：%q => %q，期望%q", tt.executable, got, tt.want)
@@ -109,13 +116,15 @@ func TestApplicationPathUsesBundleAndPreservesDevelopmentCandidate(t *testing.T)
 
 func TestUnifiedSettingsSaveFileSelectionCancellationAndFailure(t *testing.T) {
 	failure := errors.New("原生保存对话框失败")
-	const suggested = "/Users/test/Display KVM/settings.json"
+	root := t.TempDir()
+	// 保存桥先按宿主规则校验建议路径；使用本机绝对路径才能覆盖后续取消、错误和占用释放。
+	suggested := filepath.Join(root, "Display KVM", "settings.json")
 	for _, tt := range []struct {
 		name string
 		path string
 		err  error
 	}{
-		{name: "selected", path: "/Users/test/another config.json"},
+		{name: "selected", path: filepath.Join(root, "another config.json")},
 		{name: "canceled"},
 		{name: "failed", err: failure},
 	} {
@@ -145,7 +154,7 @@ func TestUnifiedSettingsSaveFileSelectionCancellationAndFailure(t *testing.T) {
 
 func TestUnifiedSettingsSaveFileRejectsInvalidSuggestionAndUnboundHost(t *testing.T) {
 	bridge := NewStartupBridge()
-	if _, canceled, err := bridge.SaveFile(context.Background(), "/settings.json"); err == nil || canceled {
+	if _, canceled, err := bridge.SaveFile(context.Background(), filepath.Join(t.TempDir(), "settings.json")); err == nil || canceled {
 		t.Fatalf("未绑定宿主必须报错：canceled=%v err=%v", canceled, err)
 	}
 	bridge.bind(context.Background(), nil, func(context.Context, string) (string, error) {
@@ -160,6 +169,7 @@ func TestUnifiedSettingsSaveFileRejectsInvalidSuggestionAndUnboundHost(t *testin
 }
 
 func TestUnifiedSettingsSaveFileCanceledRequestAndShutdownDoNotOpenDialog(t *testing.T) {
+	suggested := filepath.Join(t.TempDir(), "settings.json")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	bridge := NewStartupBridge()
@@ -168,11 +178,11 @@ func TestUnifiedSettingsSaveFileCanceledRequestAndShutdownDoNotOpenDialog(t *tes
 		return "", nil
 	}
 	bridge.bind(context.Background(), nil, save)
-	if _, canceled, err := bridge.SaveFile(ctx, "/settings.json"); !errors.Is(err, context.Canceled) || canceled {
+	if _, canceled, err := bridge.SaveFile(ctx, suggested); !errors.Is(err, context.Canceled) || canceled {
 		t.Fatalf("请求取消必须保留错误原因：canceled=%v err=%v", canceled, err)
 	}
 	bridge.bind(ctx, nil, save)
-	if _, canceled, err := bridge.SaveFile(context.Background(), "/settings.json"); !errors.Is(err, context.Canceled) || canceled {
+	if _, canceled, err := bridge.SaveFile(context.Background(), suggested); !errors.Is(err, context.Canceled) || canceled {
 		t.Fatalf("宿主退出不能伪装成用户取消：canceled=%v err=%v", canceled, err)
 	}
 }
@@ -184,6 +194,10 @@ func TestUnifiedSettingsOpenAndSaveShareDialogGate(t *testing.T) {
 			name = "save_blocks_open"
 		}
 		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			suggested := filepath.Join(root, "settings.json")
+			firstPath := filepath.Join(root, "first.json")
+			secondPath := filepath.Join(root, "second.json")
 			entered, release := make(chan struct{}), make(chan struct{})
 			defer func() {
 				select {
@@ -196,11 +210,11 @@ func TestUnifiedSettingsOpenAndSaveShareDialogGate(t *testing.T) {
 			blocked := func(context.Context, string) (string, error) {
 				close(entered)
 				<-release
-				return "/first.json", nil
+				return firstPath, nil
 			}
-			immediate := func(context.Context, string) (string, error) { return "/second.json", nil }
+			immediate := func(context.Context, string) (string, error) { return secondPath, nil }
 			first := func() (string, bool, error) { return bridge.PickFile(context.Background(), "config") }
-			second := func() (string, bool, error) { return bridge.SaveFile(context.Background(), "/settings.json") }
+			second := func() (string, bool, error) { return bridge.SaveFile(context.Background(), suggested) }
 			if firstSave {
 				bridge.bind(context.Background(), immediate, blocked)
 				first, second = second, first
@@ -220,7 +234,7 @@ func TestUnifiedSettingsOpenAndSaveShareDialogGate(t *testing.T) {
 			if err := <-result; err != nil {
 				t.Fatalf("首次原生选择失败：%v", err)
 			}
-			if path, canceled, err := second(); err != nil || canceled || path != "/second.json" {
+			if path, canceled, err := second(); err != nil || canceled || path != secondPath {
 				t.Fatalf("原生选择返回后另一类对话框必须可用：path=%q canceled=%v err=%v", path, canceled, err)
 			}
 		})
@@ -228,6 +242,7 @@ func TestUnifiedSettingsOpenAndSaveShareDialogGate(t *testing.T) {
 }
 
 func TestUnifiedSettingsCanceledSaveKeepsGateUntilNativeReturns(t *testing.T) {
+	suggested := filepath.Join(t.TempDir(), "settings.json")
 	entered, release := make(chan struct{}), make(chan struct{})
 	defer close(release)
 	bridge := NewStartupBridge()
@@ -237,12 +252,12 @@ func TestUnifiedSettingsCanceledSaveKeepsGateUntilNativeReturns(t *testing.T) {
 	}, func(context.Context, string) (string, error) {
 		close(entered)
 		<-release
-		return "/settings.json", nil
+		return suggested, nil
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	result := make(chan error, 1)
-	go func() { _, _, err := bridge.SaveFile(ctx, "/settings.json"); result <- err }()
+	go func() { _, _, err := bridge.SaveFile(ctx, suggested); result <- err }()
 	<-entered
 	cancel()
 	if err := <-result; !errors.Is(err, context.Canceled) {

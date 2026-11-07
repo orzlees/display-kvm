@@ -5,14 +5,14 @@
 - 项目归属：`/Users/orzlee/work/project/other/displayKvm`，工作名称 displayKvm
 - 总计划：[显示器切换工具开发](../任务计划/【20261105-显示器切换工具开发】.md)
 - 批准设计：[显示器控制与交付缺口补全设计](../superpowers/specs/2026-11-07-display-control-completion-design.md)
-- 对应需求：补全设计 R7；状态：进行中（rc9真实FAIL/下游SKIP保留；24三测试文件STOP、A1–A4局部独验PASS，rc10 Git/nativeCI/九档/双端实际下载待验，交付未完成）
-- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T20:03:54+08:00（父补24三测试文件STOP/局部独验终态，不是完成时刻）
+- 对应需求：补全设计 R7；状态：进行中（rc10真实FAIL/下游SKIP保留；24七tests STOP/局部独验PASS，rc11及原生/九档/下载已授权待执行，整体未完成）
+- 创建时间：2026-11-07T09:52:33+08:00；更新时间：2026-11-07T21:00:19+08:00（父转交七tests局部终态与交付边界，不是完成时刻）
 - 实际完成时间：未完成；权威完成字段为本字段，归档时间另记
 - 当前文件位置：`docs/待办事项/待办事项-20261105-显示器切换工具开发-29-Windows候选与Actions发布-进行中.md`
 - 所属系列主会话 ID：`ses_e4cc8a233ffeDDjHm7v7yPI8S3`；文档执行者：`ses_e4ca67d8affe48ddN4S1MR1ZXf`
 - 专属实施子代理会话：`ses_e4c2221a5ffe465gK11LdyFkpr`，既有单workflow extra1已STOP；原独验 `ses_e4bff311bffetgk8CWAyNcrqpC` 当轮A1 scope/A2三变量/A3 finally错误流/A4安全清理static PASS，diff/diffcheck/YAML/结构检查exit0，无本机native PS/Go执行。该历史结论与计数保留，不套作当前24三测试文件extra1通过；本轮29无新实施/验证或workflow写域
 - 执行批次/并行组：补全第2组/共享脚本串行接管28，先于30
-- 本次选中范围：25、26、27、28、29、30及24软件验证部分；本extra1三tests已STOP、原24独验A1–A4局部PASS，rc10推送及原生CI/九档/Windows与Mac实际下载已授权但Git/SHA/run尚未执行。29仍STOP、不扩workflow/门控/其它文件，旧两轮/各extras与rc9/旧局部证据保留，本轮失败先报告，不预填native PASS/可下载，usage README缺口不改/重启30
+- 本次选中范围：25、26、27、28、29、30及24软件验证部分；24七tests已STOP/局部独验PASS，rc11提交推送/两Windows native/九档及Windows/Mac实际下载已授权待执行。29仍STOP，不扩workflow/门控/UI/README，旧两轮/所有extras及rc10失败/旧局部PASS保留，本轮失败先报告无自动更多，不预填SHA/run/原生PASS/ready或重启30
 - 授权依据与停止边界：用户2026-11-07已通过 question 明确批准“按设计实施”；本任务已获准修改workflow与脚本，实现artifact上传和Release发布入口；实现入口不等于已执行发布。本轮不实际推送、触发Actions或创建Release，实际外部执行及下载核对在24软件验证阶段按已有授权和届时明确指令执行。各角色仅执行本编号，不扩到其他任务；终点为真实硬件验收准备，不提交、不新增安装器、不操作硬件。
 - 版本背景：主会话转交分支 `feat/display-control-completion`、基点 `f26ecf2`；文档执行者未执行 Git 核验或改变 Git 状态
 - 历史路径迁移状态：2026-11-07随开工从未完成后缀改为进行中后缀，不覆盖目标并同步链接；01–23归档身份和历史证据不改
@@ -135,7 +135,7 @@ Windows GUI+daemon+CLI配套，amd64/arm64支持程度依据实际证据；增�
 ## rc8真实结果（发布受阻，仅只读定位）
 
 - [run42358339526](https://github.com/orzlees/display-kvm/actions/runs/42358339526)，commit `737c7554dedf262adb098f4c76df9836526ed4fb`、tag `v0.0.1-rc.20261107.8` 已真推，run终态FAIL；Windows amd64 job128361230903、arm64 job128361231127均root Go exit1。有限annotations两类分别为cmd/displaykvmd的完整文档夹具“同步保存目录失败，须核对实际文件”和internal/settings的GOOSlinux Resolver/Windows mode夹具“当前程序没有可执行权限”，完整错误/证据集中见[24 rc8记录](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。底层dir.Sync errno/完整失败清单/desktop执行状态未知，不能跨package误归或把拒旧-config文本当根因。
-- 当前待交付（父转交）：基线仍为commit `33f654380673fdb76c808112b38c776a22453566`/tag9/[run42362288105](https://github.com/orzlees/display-kvm/actions/runs/42362288105) FAIL，两Windows root失败、desktop未知，两Linux仅tools PASS、core/两GUI/release SKIP。随后24三tests实施STOP、独立A1–A4局部PASS；cmd hostrace1包50testevents pass0fail0skip（subtest24已含）及两Windows compile0，PE未执行，精确命令/证据见[24当前契约](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)。这不等Windows native root+desktop/Linux最终闭包/MacWin GUI或九档SHA/license/实际下载通过；rc10 Git/SHA/run尚未执行、不标ready/可下载，无九档/Release实物。原局部/静态与全部旧计数保留、本extra1已用，本轮失败先报告无自动再修，29不扩workflow/合同/README/新Mac入口，硬件未验、23/30不归档。四文档必要读回/links后核验释放本人短锁FREEZE/STOP无待写无helper、父占用保留，不持锁等后续；独立Git仅三tests+四docs共7paths，待writer停写后派发，本writer不执行source/tests/build/Git/API/其它文件或报告。
+- 当前待交付（父转交）：真实基线仍为rc10 commit `654038cfbd398edce50c1a03d454fc4e77d05631`/tag `v0.0.1-rc.20261107.10`/[run42371628193](https://github.com/orzlees/display-kvm/actions/runs/42371628193) FAIL，两Windows root失败、desktop无独立执行/成功证据、Linux仅tools生成PASS、core/GUI/release SKIP，无九档/Release/实际下载/hash/PE/完整许可闭包。24七tests已STOP/局部独验PASS，A1–A8静态/两组race/8条Windows testcompile通过、PE未执行，实际计数与证据集中见[24当前记录](待办事项-20261105-显示器切换工具开发-24-全量测试构建与多环境验收-进行中.md)；六个其它file此前仅源码风险，不冒称新增Windows CI失败。rc11正常提交推送及原生/九档/Windows与Mac实际下载已授权待执行，不预填SHA/runURL/tag已push/ready或整体PASS。旧cmd局部50PASS/两Windows compile0、rc9及全部历史次数有效保留，本轮失败先报告准确原因方案、无自动新修；29不扩workflow/合同/UI/README，23/30不归档、硬件未验。四docs必要读回/links后本人逐字段核验身份/范围/token正常释放短锁FREEZE/STOP无待写无helper、父占用保留，不持锁等Git/CI，不执行source/tests/build/Git/API或新报告/检查点。
 
 ## 完成、归档与迁移
 

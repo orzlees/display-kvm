@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -59,9 +60,15 @@ func containsArg(args []string, want string) bool {
 	return false
 }
 
-func newTestBackend(runner CommandRunner) *Backend {
-	b := New("/opt/ddc tools/ddcutil;literal", runner)
-	// 只替换后端的平台判断，让macOS宿主覆盖真实业务分支；执行器仍完全可注入。
+func newTestBackend(t *testing.T, runner CommandRunner) *Backend {
+	t.Helper()
+	toolPath, err := filepath.Abs(filepath.Join("user supplied", "ddcutil;literal"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := New(toolPath, runner)
+	// 只替换后端的平台判断，让不同宿主覆盖真实Linux业务分支；执行器仍完全可注入。
+	// 路径校验使用宿主规则，合法夹具须按宿主生成，并保留空格和分号验证参数原样传递。
 	b.goos = "linux"
 	return b
 }
@@ -78,7 +85,7 @@ func TestBackendPassesSeparateArgumentsAndSameRequestContext(t *testing.T) {
 	for _, version := range []string{"2.2.7", "3.0.2"} {
 		t.Run(version, func(t *testing.T) {
 			runner := &fakeRunner{version: version}
-			b := newTestBackend(runner)
+			b := newTestBackend(t, runner)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			if b.Name() != "linux" {
@@ -125,7 +132,7 @@ func TestBackendValidatesSchemeBeforeAnyCommand(t *testing.T) {
 	}
 	for _, tt := range tests {
 		runner := &fakeRunner{}
-		b := newTestBackend(runner)
+		b := newTestBackend(t, runner)
 		_, readErr := b.ReadInput(context.Background(), fixtureDevice(), tt.scheme)
 		_, writeErr := b.SetInput(context.Background(), fixtureDevice(), tt.scheme)
 		if model.CodeOf(readErr) != tt.code || model.CodeOf(writeErr) != tt.code || len(runner.calls) != 0 {
@@ -141,7 +148,7 @@ func TestBackendRejectsStaleOrInjectedDeviceWithoutWrite(t *testing.T) {
 		{BackendID: "i2c-8", Name: fixtureDevice().Name, Identity: fixtureDevice().Identity},
 	} {
 		runner := &fakeRunner{}
-		receipt, err := newTestBackend(runner).SetInput(context.Background(), changed, fixtureScheme())
+		receipt, err := newTestBackend(t, runner).SetInput(context.Background(), changed, fixtureScheme())
 		if model.CodeOf(err) != model.CodeNotFound || !receipt.SentAt.IsZero() {
 			t.Fatalf("重新枚举不匹配时必须停止：%+v %v", receipt, err)
 		}
@@ -160,7 +167,7 @@ func TestBackendMalformedEnumerationCannotLeadToWrite(t *testing.T) {
 		}
 		return CommandOutput{Stdout: displayFixture + "unexpected\n"}, nil
 	}}
-	_, err := newTestBackend(runner).SetInput(context.Background(), fixtureDevice(), fixtureScheme())
+	_, err := newTestBackend(t, runner).SetInput(context.Background(), fixtureDevice(), fixtureScheme())
 	if model.CodeOf(err) != model.CodeTransport || len(runner.calls) != 2 {
 		t.Fatalf("异常枚举必须在写入前失败：%v %+v", err, runner.calls)
 	}
@@ -171,14 +178,14 @@ func TestBackendVersionAndAvailabilityFailBeforeDetect(t *testing.T) {
 		runner := &fakeRunner{run: func(context.Context, string, ...string) (CommandOutput, error) {
 			return CommandOutput{Stdout: version}, nil
 		}}
-		_, err := newTestBackend(runner).Enumerate(context.Background())
+		_, err := newTestBackend(t, runner).Enumerate(context.Background())
 		if model.CodeOf(err) != model.CodeUnsupportedVersion || len(runner.calls) != 1 {
 			t.Fatalf("未核对版本不得继续硬件命令：%q %v %+v", version, err, runner.calls)
 		}
 	}
 	for _, path := range []string{"", "ddcutil", "./ddcutil", "/usr/bin/ddcutil\x00"} {
 		runner := &fakeRunner{}
-		b := newTestBackend(runner)
+		b := newTestBackend(t, runner)
 		b.toolPath = path
 		_, err := b.Enumerate(context.Background())
 		if model.CodeOf(err) != model.CodeBackendUnavailable || len(runner.calls) != 0 {
@@ -186,7 +193,7 @@ func TestBackendVersionAndAvailabilityFailBeforeDetect(t *testing.T) {
 		}
 	}
 	runner := &fakeRunner{}
-	b := newTestBackend(runner)
+	b := newTestBackend(t, runner)
 	b.goos = "darwin"
 	if _, err := b.Enumerate(context.Background()); model.CodeOf(err) != model.CodeBackendUnavailable || len(runner.calls) != 0 {
 		t.Fatalf("真实平台检查不能虚报Linux可用：%v", err)
@@ -218,7 +225,7 @@ func TestBackendErrorsDistinguishPermissionsMissingToolAndTransport(t *testing.T
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			runner := &fakeRunner{run: func(context.Context, string, ...string) (CommandOutput, error) { return tt.output, tt.err }}
-			_, err := newTestBackend(runner).Enumerate(context.Background())
+			_, err := newTestBackend(t, runner).Enumerate(context.Background())
 			if model.CodeOf(err) != tt.code || len(runner.calls) != 1 {
 				t.Fatalf("错误分类不匹配或进行了隐式重试：%v want=%s calls=%d", err, tt.code, len(runner.calls))
 			}
@@ -250,7 +257,7 @@ func TestBackendFailedWriteHasNoReceiptAndNeverRetries(t *testing.T) {
 					}
 					return (&fakeRunner{version: version}).Run(ctx, path, args...)
 				}
-				receipt, err := newTestBackend(runner).SetInput(context.Background(), fixtureDevice(), fixtureScheme())
+				receipt, err := newTestBackend(t, runner).SetInput(context.Background(), fixtureDevice(), fixtureScheme())
 				if err == nil || !receipt.SentAt.IsZero() || len(runner.calls) != 3 {
 					t.Fatalf("失败/不确定提交不能伪造回执或重试：%+v %v %+v", receipt, err, runner.calls)
 				}
@@ -270,7 +277,7 @@ func TestBackendBothVersionsRejectUncertainReadAndCanceledWrite(t *testing.T) {
 					}
 					return (&fakeRunner{version: version}).Run(ctx, path, args...)
 				}}
-				observation, err := newTestBackend(runner).ReadInput(context.Background(), fixtureDevice(), fixtureScheme())
+				observation, err := newTestBackend(t, runner).ReadInput(context.Background(), fixtureDevice(), fixtureScheme())
 				if err == nil || observation.Value != nil || len(runner.calls) != 3 {
 					t.Fatalf("ERR或诊断不得产生观测或重试：%+v %v", observation, err)
 				}
@@ -284,7 +291,7 @@ func TestBackendBothVersionsRejectUncertainReadAndCanceledWrite(t *testing.T) {
 				}
 				return (&fakeRunner{version: version}).Run(ctx, path, args...)
 			}}
-			receipt, err := newTestBackend(runner).SetInput(ctx, fixtureDevice(), fixtureScheme())
+			receipt, err := newTestBackend(t, runner).SetInput(ctx, fixtureDevice(), fixtureScheme())
 			if model.CodeOf(err) != model.CodeCanceled || !receipt.SentAt.IsZero() || len(runner.calls) != 3 {
 				t.Fatalf("写入期间取消不能认定成功或回滚：%+v %v", receipt, err)
 			}
@@ -296,7 +303,7 @@ func TestBackendCancellationAndSharedOutputBudget(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	runner := &fakeRunner{}
-	if _, err := newTestBackend(runner).Enumerate(ctx); !errors.Is(err, context.Canceled) || len(runner.calls) != 0 {
+	if _, err := newTestBackend(t, runner).Enumerate(ctx); !errors.Is(err, context.Canceled) || len(runner.calls) != 0 {
 		t.Fatalf("已取消请求不得启动命令：%v", err)
 	}
 	ctx, cancel = context.WithCancel(context.Background())
@@ -305,26 +312,26 @@ func TestBackendCancellationAndSharedOutputBudget(t *testing.T) {
 		cancel()
 		return CommandOutput{Stdout: strings.Repeat("x", MaxCommandOutputBytes+1)}, nil
 	}}
-	if _, err := newTestBackend(runner).Enumerate(ctx); model.CodeOf(err) != model.CodeCanceled {
+	if _, err := newTestBackend(t, runner).Enumerate(ctx); model.CodeOf(err) != model.CodeCanceled {
 		t.Fatalf("已取消语义优先于输出超限：%v", err)
 	}
 	runner = &fakeRunner{run: func(context.Context, string, ...string) (CommandOutput, error) {
 		return CommandOutput{Stdout: strings.Repeat("x", MaxCommandOutputBytes/2), Stderr: strings.Repeat("y", MaxCommandOutputBytes/2+1)}, nil
 	}}
-	if _, err := newTestBackend(runner).Enumerate(context.Background()); model.CodeOf(err) != model.CodeMessageTooLarge {
+	if _, err := newTestBackend(t, runner).Enumerate(context.Background()); model.CodeOf(err) != model.CodeMessageTooLarge {
 		t.Fatalf("注入执行器也必须遵守stdout/stderr共享预算：%v", err)
 	}
 }
 
 func TestBackendCapabilitiesDescribeAdapterWithoutInventingHardwareSupport(t *testing.T) {
 	runner := &fakeRunner{}
-	capabilities, err := newTestBackend(runner).Capabilities(context.Background(), fixtureDevice())
+	capabilities, err := newTestBackend(t, runner).Capabilities(context.Background(), fixtureDevice())
 	if err != nil || !reflect.DeepEqual(capabilities.Protocols, []model.InputProtocol{model.ProtocolVCP}) || !capabilities.CanReadInput || capabilities.UnavailableReason != "" || len(runner.calls) != 2 {
 		t.Fatalf("能力仅描述当前适配器提供的VCP操作：%+v %v %+v", capabilities, err, runner.calls)
 	}
 	device := fixtureDevice()
 	device.Identity.Serial = "changed"
-	capabilities, err = newTestBackend(&fakeRunner{}).Capabilities(context.Background(), device)
+	capabilities, err = newTestBackend(t, &fakeRunner{}).Capabilities(context.Background(), device)
 	if model.CodeOf(err) != model.CodeNotFound || capabilities.CanReadInput || len(capabilities.Protocols) != 0 || capabilities.UnavailableReason == "" {
 		t.Fatalf("失效设备不得报告可用能力：%+v %v", capabilities, err)
 	}

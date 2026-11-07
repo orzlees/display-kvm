@@ -5,6 +5,7 @@ import (
 	"errors"
 	"html"
 	"net/http"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -22,7 +23,7 @@ func TestSettingsLanguageChangesOnlyAfterDocumentAndSelectionAreConfirmed(t *tes
 			if err != nil {
 				t.Fatal(err)
 			}
-			snapshot := unifiedSnapshot("/isolated/language.json", "before")
+			snapshot := unifiedSnapshot(filepath.Join(t.TempDir(), "language.json"), "before")
 			backend := &memoryBackend{state: initialState(), documents: map[string]settings.Snapshot{snapshot.Path: snapshot}}
 			if failure == "file" || failure == "unknown" {
 				backend.write = func(documentWrite) (settings.SaveResult, error) {
@@ -115,8 +116,9 @@ func TestSettingsLanguageSavePreservesAdvancedRuntimeAndDocumentSections(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
+	root := t.TempDir()
 	snapshot := unifiedSnapshot("/isolated/advanced.json", "before")
-	snapshot.Document.Runtime = settings.RuntimeSettings{ToolPath: "/advanced/control", BusctlPath: "/advanced/busctl", UdevadmPath: "/advanced/udevadm"}
+	snapshot.Document.Runtime = settings.RuntimeSettings{ToolPath: filepath.Join(root, "control"), BusctlPath: filepath.Join(root, "busctl"), UdevadmPath: filepath.Join(root, "udevadm")}
 	backend := &memoryBackend{state: initialState(), documents: map[string]settings.Snapshot{snapshot.Path: snapshot}}
 	backend.state.ConfigPath, backend.state.ProfileExists = snapshot.Path, true
 	handler := startup.NewHandler(backend, startup.FileDialogs{}, language)

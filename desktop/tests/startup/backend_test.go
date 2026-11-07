@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -139,7 +140,7 @@ func TestAdapterSavesProfileBeforeEnablingService(t *testing.T) {
 	manager := newManager()
 	backend := startup.NewBackend(manager, nil, "/Applications/DisplayKvm.app")
 	state, _ := backend.Read(context.Background())
-	path := "/isolated/settings.json"
+	path := filepath.Join(t.TempDir(), "settings.json")
 	result, err := backend.Save(context.Background(), startup.SaveRequest{ConfigPath: &path, ServiceEnabled: boolean(true), Expected: state})
 	if err != nil || !result.Configuration.Succeeded || !result.Service.Succeeded || !reflect.DeepEqual(manager.calls, []string{"profile", "enable:service"}) {
 		t.Fatalf("服务注册必须发生在参数保存成功后：calls=%v result=%+v err=%v", manager.calls, result, err)
@@ -154,7 +155,7 @@ func TestAdapterProfileFailureStillAllowsIndependentDesktopOutcome(t *testing.T)
 	manager.saveErr = errors.New("配置文件无权读取")
 	backend := startup.NewBackend(manager, nil, "/Applications/DisplayKvm.app")
 	state, _ := backend.Read(context.Background())
-	path := "/isolated/settings.json"
+	path := filepath.Join(t.TempDir(), "settings.json")
 	result, err := backend.Save(context.Background(), startup.SaveRequest{ConfigPath: &path, ServiceEnabled: boolean(true), DesktopEnabled: boolean(true), Expected: state})
 	if err != nil || result.Configuration.Succeeded || result.Service.Succeeded || !result.Desktop.Succeeded || !reflect.DeepEqual(manager.calls, []string{"profile", "enable:desktop"}) {
 		t.Fatalf("参数失败应阻止服务启用但不撤销桌面结果：calls=%v result=%+v err=%v", manager.calls, result, err)
@@ -173,7 +174,7 @@ func TestUnifiedSettingsConfirmedProfileWithStatusErrorStillReachesServiceEnable
 	if !errors.Is(err, statusErr) || !state.Service.Known || state.Service.Ready == nil || !*state.Service.Ready {
 		t.Fatalf("需要真实保留汇总错误与可信服务分项：state=%+v err=%v", state, err)
 	}
-	path := "/isolated/settings.json"
+	path := filepath.Join(t.TempDir(), "settings.json")
 	// 核心在档案写入并读回后仍可能因另一项状态查询返回错误；不能把该错误
 	// 当作档案未保存，或阻断显式服务请求进入核心自己的再次校验。
 	result, err := backend.Save(context.Background(), startup.SaveRequest{ConfigPath: &path, ServiceEnabled: boolean(true), Expected: state})
@@ -233,7 +234,7 @@ func TestUnifiedSettingsUnconfirmedProfileBlocksServiceButAllowsTrustedDesktopDi
 			if err != nil || !state.Desktop.Known || !state.Desktop.Enabled {
 				t.Fatalf("独立关闭桌面项的前提必须可信：state=%+v err=%v", state, err)
 			}
-			path := "/isolated/settings.json"
+			path := filepath.Join(t.TempDir(), "settings.json")
 			// nil表示保存证据未知，false表示确认未保存；二者都不能启用服务，
 			// 但取消可信桌面项不依赖服务档案，不能被连带封锁或回滚。
 			result, err := backend.Save(context.Background(), startup.SaveRequest{ConfigPath: &path, ServiceEnabled: boolean(true), DesktopEnabled: boolean(false), Expected: state})

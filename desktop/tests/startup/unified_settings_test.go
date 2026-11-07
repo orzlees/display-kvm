@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -20,6 +21,8 @@ func unifiedSnapshot(path, revision string) settings.Snapshot {
 func TestUnifiedSettingsNewCanceledOrFailedDoesNotChangePosition(t *testing.T) {
 	for _, canceled := range []bool{true, false} {
 		t.Run(map[bool]string{true: "取消", false: "失败"}[canceled], func(t *testing.T) {
+			// 页面在调用文档存储前按宿主校验路径，合法目的地须使用本机绝对路径才能覆盖写入结果。
+			path := filepath.Join(t.TempDir(), "new.json")
 			backend := &memoryBackend{state: initialState(), write: func(documentWrite) (settings.SaveResult, error) {
 				return settings.SaveResult{Saved: boolean(false)}, errors.New("无法保存文件")
 			}}
@@ -27,7 +30,7 @@ func TestUnifiedSettingsNewCanceledOrFailedDoesNotChangePosition(t *testing.T) {
 				if !strings.HasSuffix(suggested, "settings.json") {
 					t.Errorf("缺少建议文件名：%s", suggested)
 				}
-				return "/isolated/new.json", canceled, nil
+				return path, canceled, nil
 			}})
 			values := form(t, get(t, handler))
 			values.Set("action", "new_config")
@@ -41,8 +44,9 @@ func TestUnifiedSettingsNewCanceledOrFailedDoesNotChangePosition(t *testing.T) {
 }
 
 func TestUnifiedSettingsNewAllowsBundledToolAndSavesSelectionOnlyOnExplicitSave(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "new.json")
 	backend := &memoryBackend{state: initialState()}
-	handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Save: func(context.Context, string) (string, bool, error) { return "/isolated/new.json", false, nil }})
+	handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Save: func(context.Context, string) (string, bool, error) { return path, false, nil }})
 	values := form(t, get(t, handler))
 	values.Set("action", "new_config")
 	response := post(handler, values)
@@ -55,7 +59,7 @@ func TestUnifiedSettingsNewAllowsBundledToolAndSavesSelectionOnlyOnExplicitSave(
 	if backend.writes[0].document.Runtime.ToolPath != "" {
 		t.Fatal("包内工具位置不能作为安装绝对路径写入完整文档")
 	}
-	requireText(t, response, "/isolated/new.json")
+	requireText(t, response, path)
 	requireText(t, response, `name="language"`)
 	values = form(t, response)
 	values.Set("service_enabled", "1")
@@ -64,14 +68,16 @@ func TestUnifiedSettingsNewAllowsBundledToolAndSavesSelectionOnlyOnExplicitSave(
 		t.Fatal("空工具路径的完整文档合法，显式保存必须先确认文档再保存选择和开关")
 	}
 	request := backend.saves[0]
-	if request.ConfigPath == nil || *request.ConfigPath != "/isolated/new.json" || request.ServiceEnabled == nil || !*request.ServiceEnabled || request.DesktopEnabled != nil {
+	if request.ConfigPath == nil || *request.ConfigPath != path || request.ServiceEnabled == nil || !*request.ServiceEnabled || request.DesktopEnabled != nil {
 		t.Fatalf("包内工具的运行就绪校验应交给后台启用操作：%+v", request)
 	}
 }
 
 func TestUnifiedSettingsLoadIsReadOnlyAndBadLoadKeepsDraft(t *testing.T) {
-	backend := &memoryBackend{state: initialState(), documents: map[string]settings.Snapshot{"/isolated/good.json": unifiedSnapshot("/isolated/good.json", "r1")}, documentErrors: map[string]error{"/isolated/bad.json": errors.New("配置文件格式无法识别")}}
-	paths := []string{"/isolated/good.json", "/isolated/bad.json", ""}
+	root := t.TempDir()
+	goodPath, badPath := filepath.Join(root, "good.json"), filepath.Join(root, "bad.json")
+	backend := &memoryBackend{state: initialState(), documents: map[string]settings.Snapshot{goodPath: unifiedSnapshot(goodPath, "r1")}, documentErrors: map[string]error{badPath: errors.New("配置文件格式无法识别")}}
+	paths := []string{goodPath, badPath, ""}
 	calls := 0
 	handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Open: func(context.Context, string) (string, bool, error) {
 		p := paths[calls]
@@ -91,15 +97,16 @@ func TestUnifiedSettingsLoadIsReadOnlyAndBadLoadKeepsDraft(t *testing.T) {
 	if len(backend.writes) != 0 || len(backend.saves) != 0 || calls != 3 {
 		t.Fatal("加载、失败和取消均不得写文件或启动项")
 	}
-	requireText(t, response, "/isolated/good.json")
+	requireText(t, response, goodPath)
 	if form(t, response).Get("language") != "zh-CN" {
 		t.Fatal("加载失败或取消不能丢弃当前语言草稿")
 	}
 }
 
 func TestUnifiedSettingsSaveAsUsesDraftAndRequiresExplicitValidOverwrite(t *testing.T) {
-	backend := &memoryBackend{state: initialState(), documents: map[string]settings.Snapshot{"/isolated/existing.json": unifiedSnapshot("/isolated/existing.json", "original")}}
-	handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Save: func(context.Context, string) (string, bool, error) { return "/isolated/existing.json", false, nil }})
+	path := filepath.Join(t.TempDir(), "existing.json")
+	backend := &memoryBackend{state: initialState(), documents: map[string]settings.Snapshot{path: unifiedSnapshot(path, "original")}}
+	handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Save: func(context.Context, string) (string, bool, error) { return path, false, nil }})
 	values := form(t, get(t, handler))
 	values.Set("action", "save_as")
 	values.Set("language", "zh-CN")
@@ -123,8 +130,9 @@ func TestUnifiedSettingsSaveAsUsesDraftAndRequiresExplicitValidOverwrite(t *test
 func TestUnifiedSettingsInvalidDestinationCannotBeOverwritten(t *testing.T) {
 	for _, reason := range []string{"未知版本", "缺少完整配置分区"} {
 		t.Run(reason, func(t *testing.T) {
-			backend := &memoryBackend{state: initialState(), documentErrors: map[string]error{"/isolated/target.json": errors.New(reason)}}
-			handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Save: func(context.Context, string) (string, bool, error) { return "/isolated/target.json", false, nil }})
+			path := filepath.Join(t.TempDir(), "target.json")
+			backend := &memoryBackend{state: initialState(), documentErrors: map[string]error{path: errors.New(reason)}}
+			handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Save: func(context.Context, string) (string, bool, error) { return path, false, nil }})
 			values := form(t, get(t, handler))
 			values.Set("action", "save_as")
 			response := post(handler, values)
@@ -137,10 +145,11 @@ func TestUnifiedSettingsInvalidDestinationCannotBeOverwritten(t *testing.T) {
 }
 
 func TestUnifiedSettingsUnknownFileWriteRequiresExplicitReadWithoutRetry(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "new.json")
 	backend := &memoryBackend{state: initialState(), write: func(documentWrite) (settings.SaveResult, error) {
 		return settings.SaveResult{}, errors.New("写入结果未知")
 	}}
-	handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Save: func(context.Context, string) (string, bool, error) { return "/isolated/new.json", false, nil }})
+	handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Save: func(context.Context, string) (string, bool, error) { return path, false, nil }})
 	values := form(t, get(t, handler))
 	values.Set("action", "save_as")
 	response := post(handler, values)
@@ -231,9 +240,10 @@ func TestUnifiedSettingsRemovedActionsAndFieldsAreRejected(t *testing.T) {
 }
 
 func TestUnifiedSettingsCurrentDocumentSavePreservesAllOtherSections(t *testing.T) {
+	root := t.TempDir()
 	snapshot := unifiedSnapshot("/isolated/current.json", "loaded")
-	snapshot.Document.Runtime.ToolPath = "/preserved/tool"
-	snapshot.Document.Runtime.BusctlPath = "/preserved/busctl"
+	snapshot.Document.Runtime.ToolPath = filepath.Join(root, "preserved", "tool")
+	snapshot.Document.Runtime.BusctlPath = filepath.Join(root, "preserved", "busctl")
 	expected := snapshot.Document
 	expected.Desktop.Language = "zh-CN"
 	state := initialState()
@@ -251,7 +261,7 @@ func TestUnifiedSettingsCurrentDocumentSavePreservesAllOtherSections(t *testing.
 }
 
 func TestWholePageSaveWritesDocumentBeforeSelectingItAndChangingBothItems(t *testing.T) {
-	snapshot := unifiedSnapshot("/isolated/whole.json", "r1")
+	snapshot := unifiedSnapshot(filepath.Join(t.TempDir(), "whole.json"), "r1")
 	backend := &memoryBackend{state: initialState(), documents: map[string]settings.Snapshot{snapshot.Path: snapshot}}
 	handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Open: func(context.Context, string) (string, bool, error) { return snapshot.Path, false, nil }})
 	values := form(t, get(t, handler))
@@ -282,8 +292,9 @@ func TestWholePageSaveWritesDocumentBeforeSelectingItAndChangingBothItems(t *tes
 func TestWholePageSaveChoosesFirstLocationAndCanceledSaveKeepsAllDrafts(t *testing.T) {
 	for _, canceled := range []bool{true, false} {
 		t.Run(map[bool]string{true: "取消", false: "保存"}[canceled], func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "first.json")
 			backend := &memoryBackend{state: initialState()}
-			handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Save: func(context.Context, string) (string, bool, error) { return "/isolated/first.json", canceled, nil }})
+			handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Save: func(context.Context, string) (string, bool, error) { return path, canceled, nil }})
 			values := form(t, get(t, handler))
 			values.Set("language", "zh-CN")
 			values.Set("service_enabled", "1")
@@ -306,7 +317,7 @@ func TestWholePageSaveChoosesFirstLocationAndCanceledSaveKeepsAllDrafts(t *testi
 }
 
 func TestWholePageOverwriteConfirmationContinuesTheSameSave(t *testing.T) {
-	snapshot := unifiedSnapshot("/isolated/existing.json", "before")
+	snapshot := unifiedSnapshot(filepath.Join(t.TempDir(), "existing.json"), "before")
 	backend := &memoryBackend{state: initialState(), documents: map[string]settings.Snapshot{snapshot.Path: snapshot}}
 	handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Save: func(context.Context, string) (string, bool, error) { return snapshot.Path, false, nil }})
 	values := form(t, get(t, handler))
@@ -370,7 +381,7 @@ func TestWholePageFileFailureDoesNotSelectOrEnableServiceButKeepsIndependentDesk
 }
 
 func TestWholePagePartialSystemFailureDoesNotRewriteConfirmedDocumentOrDesktop(t *testing.T) {
-	snapshot := unifiedSnapshot("/isolated/partial.json", "before")
+	snapshot := unifiedSnapshot(filepath.Join(t.TempDir(), "partial.json"), "before")
 	backend := &memoryBackend{state: initialState(), documents: map[string]settings.Snapshot{snapshot.Path: snapshot}}
 	backend.save = func(request startup.SaveRequest) (startup.SaveResult, error) {
 		backend.state.ConfigPath, backend.state.ProfileExists = *request.ConfigPath, true
@@ -462,7 +473,7 @@ func TestUnifiedSettingsCanceledNewOrSaveAsKeepsPositionLanguageAndRevision(t *t
 }
 
 func TestUnifiedSettingsLoadedReadyDocumentCanBeSelectedWithoutRewritingIt(t *testing.T) {
-	snapshot := unifiedSnapshot("/isolated/ready.json", "ready")
+	snapshot := unifiedSnapshot(filepath.Join(t.TempDir(), "ready.json"), "ready")
 	snapshot.Document.Runtime.ToolPath = "/ready/tool"
 	backend := &memoryBackend{state: initialState(), documents: map[string]settings.Snapshot{snapshot.Path: snapshot}}
 	handler := newChineseStartupHandler(t, backend, startup.FileDialogs{Open: func(context.Context, string) (string, bool, error) { return snapshot.Path, false, nil }})
@@ -515,7 +526,7 @@ func TestUnifiedSettingsFourLoginCombinationsRemainIndependent(t *testing.T) {
 }
 
 func TestUnifiedSettingsBundledToolSelectionSurvivesServiceFailureAndIndependentDesktopSave(t *testing.T) {
-	snapshot := unifiedSnapshot("/isolated/empty-tool.json", "empty-tool")
+	snapshot := unifiedSnapshot(filepath.Join(t.TempDir(), "empty-tool.json"), "empty-tool")
 	snapshot.Document.Desktop.Language = "zh-CN"
 	backend := &memoryBackend{state: initialState(), documents: map[string]settings.Snapshot{snapshot.Path: snapshot}}
 	// 空工具路径由核心解析包内工具；页面只确认完整文档和选择，不能代替
@@ -552,8 +563,9 @@ func TestUnifiedSettingsBundledToolSelectionSurvivesServiceFailureAndIndependent
 }
 
 func TestUnifiedSettingsCancelRestoresStartupSelectionWithoutTouchingFiles(t *testing.T) {
-	original := unifiedSnapshot("/isolated/original.json", "original")
-	other := unifiedSnapshot("/isolated/other.json", "other")
+	root := t.TempDir()
+	original := unifiedSnapshot(filepath.Join(root, "original.json"), "original")
+	other := unifiedSnapshot(filepath.Join(root, "other.json"), "other")
 	state := initialState()
 	state.ConfigPath = original.Path
 	state.ProfileExists = true
