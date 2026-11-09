@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="570" viewBox="0 0 800 570" role="img" aria-labelledby="title description">
+  <title id="title">displayKvm — 连接示意 / Connection example</title>
+  <desc id="description">Computer A connects to both displays through example DP inputs. Computer B connects to both displays through example HDMI inputs. Four separate video connections are shown. This is a connection diagram, not an application screenshot or a hardware compatibility claim.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="800" y2="570" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1b2823"/>
+      <stop offset="0.65" stop-color="#111314"/>
+      <stop offset="1" stop-color="#18212a"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="292" y1="0" x2="508" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#223c32"/>
+      <stop offset="1" stop-color="#253442"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="798" height="568" rx="22" fill="url(#background)" stroke="#35423b" stroke-width="2"/>
+  <g fill="none" stroke="#8dd8be" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="34" y="31" width="27" height="20" rx="4"/>
+    <path d="M44 58h18M53 51v7M68 40v13a5 5 0 0 1-5 5"/>
+  </g>
+  <g font-family="Avenir Next, Segoe UI, PingFang SC, Microsoft YaHei, sans-serif">
+    <text x="86" y="54" fill="#f1f3f2" font-size="26" font-weight="600">displayKvm</text>
+    <text x="766" y="51" text-anchor="end" fill="#acb9b2" font-size="20">连接示意 / Connection example</text>
+    <path d="M34 83h732" stroke="#35423b"/>
+
+    <g fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M186 264h32q12 0 12-12v-40q0-12 12-12h34" stroke="#8dd8be"/>
+      <path d="M186 336h32q12 0 12 12v96q0 12 12 12h34" stroke="#8dd8be"/>
+      <path d="M614 264h-32q-12 0-12-12v-40q0-12-12-12h-34" stroke="#a6c7ef"/>
+      <path d="M614 336h-32q-12 0-12 12v96q0 12-12 12h-34" stroke="#a6c7ef"/>
+    </g>
+
+    <g fill="#191d1c" stroke="#52665b" stroke-width="2">
+      <rect x="34" y="225" width="152" height="150" rx="18"/>
+      <rect x="614" y="225" width="152" height="150" rx="18"/>
+    </g>
+    <path d="M54 245h24m-24 7h14" stroke="#8dd8be" stroke-width="3" stroke-linecap="round"/>
+    <path d="M634 245h24m-24 7h14" stroke="#a6c7ef" stroke-width="3" stroke-linecap="round"/>
+    <g text-anchor="middle" font-weight="600">
+      <text x="110" y="302" fill="#f1f3f2" font-size="48">A</text>
+      <text x="690" y="302" fill="#f1f3f2" font-size="48">B</text>
+      <text x="110" y="347" fill="#8dd8be" font-size="28">DP</text>
+      <text x="690" y="347" fill="#a6c7ef" font-size="28">HDMI</text>
+    </g>
+
+    <g stroke="#748b7e" stroke-width="2">
+      <rect x="276" y="128" width="248" height="130" rx="13" fill="#191d1c"/>
+      <rect x="292" y="142" width="216" height="98" rx="6" fill="url(#screen)" stroke="none"/>
+      <path d="M400 258v16m-28 0h56" fill="none" stroke-linecap="round"/>
+      <rect x="276" y="384" width="248" height="130" rx="13" fill="#191d1c"/>
+      <rect x="292" y="398" width="216" height="98" rx="6" fill="url(#screen)" stroke="none"/>
+      <path d="M400 514v16m-28 0h56" fill="none" stroke-linecap="round"/>
+    </g>
+    <g fill="#f1f3f2" font-size="42" font-weight="600" text-anchor="middle">
+      <text x="400" y="194">1</text>
+      <text x="400" y="450">2</text>
+    </g>
+    <g font-size="28" font-weight="500">
+      <text x="306" y="226" fill="#8dd8be">DP</text>
+      <text x="494" y="226" text-anchor="end" fill="#a6c7ef">HDMI</text>
+      <text x="306" y="482" fill="#8dd8be">DP</text>
+      <text x="494" y="482" text-anchor="end" fill="#a6c7ef">HDMI</text>
+    </g>
+    <g stroke="#111314" stroke-width="3">
+      <g fill="#8dd8be">
+        <circle cx="186" cy="264" r="6"/><circle cx="186" cy="336" r="6"/>
+        <circle cx="276" cy="200" r="6"/><circle cx="276" cy="456" r="6"/>
+      </g>
+      <g fill="#a6c7ef">
+        <circle cx="614" cy="264" r="6"/><circle cx="614" cy="336" r="6"/>
+        <circle cx="524" cy="200" r="6"/><circle cx="524" cy="456" r="6"/>
+      </g>
+    </g>
+    <text x="400" y="324" text-anchor="middle" fill="#acb9b2" font-size="20">端口仅作举例 / Example ports</text>
+  </g>
+</svg>
