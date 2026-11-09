@@ -8,7 +8,7 @@ Manage display inputs with a desktop application, command-line client, and local
 
 [Download a candidate](#download-a-candidate) · [Quick start](#quick-start) · [Platform status](#platform-status) · [User guide](docs/usage/README.md) (Chinese) · [MIT license](LICENSE)
 
-> **Prerelease candidate** · Software builds, CI, and archive download checks have passed. Packaged applications and real hardware behavior still require testing on real systems.
+> **Prerelease candidate** · Software builds, CI, and archive download checks passed for rc12. Build and release checks for the new candidate are still pending. Packaged applications and real hardware behavior still require testing on real systems.
 
 ![Connection example: computer A connects to displays 1 and 2 through DP; computer B connects to both through HDMI, making four video connections.](docs/assets/readme/connection-overview.svg)
 
@@ -25,9 +25,9 @@ Actual control depends on the monitor, DDC/CI, drivers, and connection path. **A
 
 ## Download a candidate
 
-**[Get v0.0.1-rc.20261107.12 →](https://github.com/orzlees/display-kvm/releases/tag/v0.0.1-rc.20261107.12)**
+**[Get v0.0.1-rc.20261109.1 →](https://github.com/orzlees/display-kvm/releases/tag/v0.0.1-rc.20261109.1)**
 
-Choose an archive for your operating system, CPU architecture, and archive type, then check its matching SHA-256 file. The release contains nine archives and nine checksum files. The [candidate build and release workflow](https://github.com/orzlees/display-kvm/actions/runs/42381983666) passed.
+Choose an archive for your operating system, CPU architecture, and archive type, then check its matching SHA-256 file. The rc12 release contains nine archives and nine checksum files. Its [build and release workflow](https://github.com/orzlees/display-kvm/actions/runs/42381983666) passed; artifacts and check results for the new candidate are still pending.
 
 These are prerelease candidates, not full installers, and have no trusted distribution signature. The macOS app uses an ad-hoc signature and is not notarized. The packaged applications have not been run on real systems; monitor, USB, login, and sleep/wake behavior still require real-system testing.
 
@@ -47,7 +47,7 @@ These are prerelease candidates, not full installers, and have no trusted distri
 
 **macOS:** Apple Silicon uses bundled `m1ddc v1.3.1`, selecting displays by UUID and sending `input` or `input-alt` with decimal input values. Real monitors, the desktop WebView, and DDC/CI control while another input is active still require real-system testing.
 
-**Windows:** the standard VCP path needs no separate display-control tool. The AMD/LG special-protocol path is amd64 only and uses the current user's installed AMD driver, source address `0x50`, and private command `0xF4`; standard VCP `0x60` is not a substitute. Missing drivers, ambiguous target mappings, or failed identity checks prevent submission. This path has no reliable readback and does not offer the five-second input preview. The arm64 standard path and desktop candidate do not imply support for this special path.
+**Windows:** the standard VCP path needs no separate display-control tool. The AMD/LG special-protocol path is amd64 only and uses the current user's installed AMD driver, source address `0x50`, and private command `0xF4`; standard VCP `0x60` is not a substitute. Missing drivers, ambiguous target mappings, or failed identity checks prevent submission. This path has no reliable readback and does not offer the five-second input preview. The arm64 standard path and desktop candidate do not imply support for this special path. Candidate `v0.0.1-rc.20261109.1` will include an experimental NVIDIA LG path for Windows amd64 only. It requires an installed NVIDIA driver and `nvapi64.dll` in the Windows `System32` directory, plus a unique match for the GDI name, full EDID, a single GPU, and an output target with a single set bit. It has not been tested on NVIDIA hardware.
 
 Windows also depends on the required local filesystem capabilities. WebView2, installation, permissions, login startup, and monitor switching have not completed real-system validation. Focused tests and cross-compilation do not prove native Windows operation or real input switching. See the [task plan](docs/任务计划/【20261105-显示器切换工具开发】.md) (Chinese) and its verification evidence for the recorded status.
 
@@ -124,14 +124,14 @@ Save a target before testing it from a visible local screen. The background proc
 - A failed, unknown, or conflicting restoration stops previews for subsequent displays. Restoration succeeds only after the original input is read back again.
 - Timing and restoration belong to the background process; closing or reloading the page does not cancel them. A finished countdown, request timeout, or disconnected interface does not prove restoration. After disconnection, query the original test session instead of starting another preview.
 
-A disconnected DDC/CI control path, a killed background process, or a power failure can prevent restoration. Be ready to select the local input through the monitor's OSD (on-screen menu). The Windows AMD/LG special-protocol path has no reliable readback and does not offer this preview. Read the [preview behavior and limits](docs/usage/input-preview.md) (Chinese) before using it.
+A disconnected DDC/CI control path, a killed background process, or a power failure can prevent restoration. Be ready to select the local input through the monitor's OSD (on-screen menu). The Windows AMD/LG path and experimental NVIDIA LG path have no reliable readback and do not offer this preview. Neither path automatically falls back to standard VCP on failure. Read the [preview behavior and limits](docs/usage/input-preview.md) (Chinese) before using it.
 
 ## Build and package
 
 <details>
 <summary>Source development, builds, and packaging</summary>
 
-The source requires Go 1.26.10 or later; the current candidate was built with Go 1.27.3. The desktop is a separate Go module. macOS desktop builds also need Xcode/Clang and CGO; the macOS script uses the local toolchain (`GOTOOLCHAIN=local`).
+The source requires Go 1.26.10 or later; the rc12 candidate was built with Go 1.27.3. The desktop is a separate Go module. macOS desktop builds also need Xcode/Clang and CGO; the macOS script uses the local toolchain (`GOTOOLCHAIN=local`).
 
 These `go run` examples are for source development. On macOS, bare `go run` does not bundle `m1ddc`; running outside the app bundle without an advanced tool-path override reports a missing dependency. For everyday macOS use, prefer the complete `.app` and its bundled background process. Advanced source overrides are described in the [user guide](docs/usage/README.md) (Chinese).
 

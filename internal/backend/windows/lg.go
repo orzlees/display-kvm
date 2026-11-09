@@ -269,6 +269,23 @@ func (t *nativeTransport) withLGInput(ctx context.Context, monitor PhysicalMonit
 	if err != nil {
 		return err
 	}
+	// PCI厂商来自活动GDI源，独立于ADL十进制1002字段。只在原生API明确
+	// 提供分流证据时选择新通路；旧ADL注入实现继续沿用原有身份校验。
+	// 同一把进程锁也覆盖NVAPI初始化、同步发送和卸载，防止另一实例提前卸载。
+	if api, ok := t.api.(nativeNVIDIAAPI); ok {
+		vendor, vendorErr := api.displayVendor(before.gdi)
+		if vendorErr != nil {
+			return vendorErr
+		}
+		switch vendor {
+		case 0x10de:
+			return t.withNVIDIALGInput(ctx, monitor, before, packet, api)
+		case 0x1002:
+			// AMD仍使用下方完整ADL映射；NVAPI失败不进入此分支。
+		default:
+			return lgUnsupported("活动显示源不是已支持的AMD或NVIDIA显卡")
+		}
+	}
 	session, err := t.api.(nativeLGAPI).openADL()
 	if err != nil {
 		return err

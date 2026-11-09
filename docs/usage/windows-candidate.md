@@ -8,6 +8,8 @@ Windows 10 1803（OS build 17134）及以后。本地文件系统须支持配置
 
 显示器需启用 DDC/CI，显示器、转接链路和驱动需支持输入源控制。程序使用 Windows 自带接口，无需另装显示器控制工具；无法唯一匹配的显示器不会执行切换。
 
+候选 `v0.0.1-rc.20261109.1` 将包含 NVIDIA LG 实验性私有输入通道。该通道仅限 Windows amd64，需已安装 NVIDIA 驱动及 Windows 系统目录 `System32` 中的 `nvapi64.dll`，并能唯一匹配 GDI 名称、完整 EDID、单 GPU 和单 bit 输出目标。它尚未在 NVIDIA 硬件验证，不支持可靠读回或五秒预览，也不会在失败后自动回退标准 VCP。
+
 ## 文件布局
 
 `displaykvm.exe`：桌面界面；`displaykvmd.exe`：后台；`displaykvm-cli.exe`：命令行。三者位于同一目录，必须来自同一个版本、架构和源码构建。核心包中原有的 `displaykvm.exe` 是命令行，复制进入桌面候选时更名为 `displaykvm-cli.exe`；不要用核心包中的同名文件覆盖桌面界面。Windows 文件名大小写不敏感，不能以大小写区分桌面与命令行程序。

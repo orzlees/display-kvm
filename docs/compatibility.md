@@ -9,9 +9,9 @@
 | Linux amd64/arm64 | rc12 已生成 ddcutil、busctl、udevadm 随包载荷，通过构建、依赖闭包、来源和许可发布门禁；生成基线为 Debian 12 / glibc 2.36，不能泛称所有发行版或显示器兼容 | 发布包尚未实机运行，未完成这些架构的本机安装运行或硬件验收 |
 | Windows amd64/arm64 | user32/dxva2原生后端可枚举、读取当前输入并按配置切换VCP 0x60，无需外部显示控制工具；启动前置包括设置写锁及IPC私有权限/单实例保护 | 主机七包回归、六份双架构专测编译、六个程序构建及带许可ZIP核验通过；exe均未运行，真实系统及硬件未验证 |
 
-软件定向验证已覆盖标准协议与 LG 特殊提交的边界，Windows 原生 API、AMD 驱动、双架构桌面运行及真实设备仍须最终验证。标准 VCP 支持、AMD 特殊支持和实际链路可用性分别判断。既有原生接入的设计与实施边界见[本轮设计](superpowers/specs/2026-11-07-windows-display-design.md)和[实施计划](superpowers/plans/2026-11-07-windows-display.md)。
+软件定向验证已覆盖标准协议与 LG 特殊提交的边界，Windows 原生 API、AMD/NVIDIA 驱动、双架构桌面运行及真实设备仍须最终验证。标准 VCP 支持、AMD/NVIDIA LG 特殊支持和实际链路可用性分别判断。既有原生接入的设计与实施边界见[本轮设计](superpowers/specs/2026-11-07-windows-display-design.md)和[实施计划](superpowers/plans/2026-11-07-windows-display.md)。
 
-Windows 的 AMD LG 特殊路径仅限 amd64，要求已安装的 AMD 驱动、稳定物理映射及 EDID 唯一匹配；无法确认目标时拒绝写入。arm64、NVIDIA、Intel 不承诺此特殊功能，标准 VCP 路径独立判断。
+Windows 的 AMD LG 特殊路径仅限 amd64，要求已安装的 AMD 驱动、稳定物理映射及 EDID 唯一匹配；无法确认目标时拒绝写入。arm64 不承诺此特殊功能，标准 VCP 路径独立判断。Intel 不支持此特殊通道；候选 `v0.0.1-rc.20261109.1` 将包含仅限 Windows amd64 的 NVIDIA LG 实验性通道，需已安装的 NVIDIA 驱动及 Windows 系统目录 `System32` 中的 `nvapi64.dll`，并能唯一匹配 GDI 名称、完整 EDID、单 GPU 和单 bit 输出目标。NVIDIA 通道尚未实机验证。AMD 与 NVIDIA LG 通道均无可靠输入读回，不提供五秒预览，失败不自动回退标准 VCP。
 
 主机七包回归返回码0、7包通过：427个叶测试通过、1个叶测试跳过、66个父级测试通过，无失败；父级与叶测试不合并计数，先前原生后端诊断失败项已通过。证据见[主机结果](verification/2026-11-07-windows-display/host-results.json)及[命令元数据](verification/2026-11-07-windows-display/host-tests.meta.json)。原生后端、IPC、设置专测共六份Windows amd64/arm64测试编译及三入口双架构共六个程序构建均返回码0，见[两包测试编译](verification/2026-11-07-windows-display/native-ipc-windows-builds.results.json)与[后续构建](verification/2026-11-07-windows-display/program-builds.results.json)。最终带许可ZIP及完整哈希见[本轮摘要](verification/2026-11-07-windows-display/summary.md)，手动运行见[候选说明](usage/windows-candidate.md)。exe均未运行；主机注入API测试与交叉编译不等于Windows运行验证，真实ACL、锁、端点替换、启动、DDC/CI、桌面、WebView2及安装均未实机验证。
 
